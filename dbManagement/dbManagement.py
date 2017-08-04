@@ -46,7 +46,7 @@ def créerSchéma(conn:s.Connection) -> None:
       "foreign key(competenceTypeId) references competenceType(id), foreign key(competenceChapitreId) references competenceChapitre(id));"
     # lancement des requêtes
     c.execute(str_tablesimple('competenceType'))
-    c.execute(str_tablesimple('competenceCahpitre'))
+    c.execute(str_tablesimple('competenceChapitre'))
     c.execute(str_tableCompetences)
 
 ## Ajout / retrait / lecture dans les tables simples (juste une liste avec des noms) :
@@ -85,6 +85,10 @@ ajoutCompétenceType = lambda conn,nom: ajoutSimpleTable(conn,'competenceType',n
 retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
 récupèreCompétenceTypes = lambda conn: récupèreSimpleTable(conn,'competenceType')
 
+ajoutCompétenceChapitre = lambda conn,nom: ajoutSimpleTable(conn,'competenceChapitre',nom)
+retraitCompétenceChapitre = lambda conn,nom: retraitSimpleTable(conn,'competenceChapitre',nom)
+récupèreCompétenceChapitres = lambda conn: récupèreSimpleTable(conn,'competenceChapitre')
+
 
 ## Partie main pour tests
 
@@ -96,12 +100,15 @@ if __name__ == '__main__':
     # test d'ouverture et affichage du schema
     nom_db = 'competences_test.db'
     conn = ouvrirDB(nom_db)
-    créerSchéma(conn)
+    afficherSéparateur()
     c = conn.cursor()
     c.execute("SELECT name FROM sqlite_master WHERE type='table';")
     a = c.fetchall()  # forme non simplement utilisable des noms des tables
+    if len(a) < 2:
+        créerSchéma(conn)
+        c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        a = c.fetchall()  # forme non simplement utilisable des noms des tables
     a = [ t[0] for t in a[1:] ]  # on enlève la table sqlite_sequence et on extrait les noms
-    afficherSéparateur()
     print("Liste des tables dans la DB :\n", a)
     afficherSéparateur()
     for tab in a:
@@ -112,7 +119,7 @@ if __name__ == '__main__':
             print("\t * {}".format(col))
     afficherSéparateur()
     # Test de gestion de la table des types de compétences
-    print("Test de l'interface avec la table connaissanceType")
+    print("Test de l'interface avec la table compétenceType")
     tab = ['technique','analyse','connaissance']
     print("lignes existantes :",récupèreCompétenceTypes(conn))
     for compTp in tab:
@@ -122,5 +129,17 @@ if __name__ == '__main__':
     print("lignes existantes :",récupèreCompétenceTypes(conn))
     for t in récupèreCompétenceTypes(conn):
         retraitCompétenceType(conn,t)
+    afficherSéparateur()
+    # Test de gestion de la table des chapitres de compétences
+    print("Test de l'interface avec la table compétenceChapitre")
+    tab = ['généralités','mécanique','transformations chimiques']
+    print("lignes existantes :",récupèreCompétenceChapitres(conn))
+    for compTp in tab:
+        ajoutCompétenceChapitre(conn,compTp)
+    print("lignes existantes :",récupèreCompétenceChapitres(conn))
+    retraitCompétenceChapitre(conn,'mécanique')
+    print("lignes existantes :",récupèreCompétenceChapitres(conn))
+    for t in récupèreCompétenceChapitres(conn):
+        retraitCompétenceChapitre(conn,t)
     afficherSéparateur()
     fermerDB(conn)

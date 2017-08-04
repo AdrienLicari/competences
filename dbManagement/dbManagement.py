@@ -31,32 +31,59 @@ def fermerDB(conn:s.Connection) -> None:
     conn.close()
 
 
-## Ajout / retrait / lecture des types de compétences
+## Création du schéma si besoin est
 
-def ajoutCompétenceType(conn:s.Connection, nom:str) -> None:
+def créerSchéma(conn:s.Connection) -> None:
     """
-    Fonction pour ajouter des types de compétences
+    Fonction qui permet de créer intégralement un schéma adapté au suivi des compétences.
     """
     c = conn.cursor()
-    c.execute("insert into competenceType (nom) values ('{}');".format(nom))
+    # création des requêtes SQL
+    str_tablesimple = lambda nom: "create table {}".format(nom) + \
+      "(id integer primary key autoincrement, nom text);"
+    str_tableCompetences = "CREATE TABLE competence" + \
+      "(id integer primary key autoincrement, nom text, competenceTypeId int, competenceChapitreId int," + \
+      "foreign key(competenceTypeId) references competenceType(id), foreign key(competenceChapitreId) references competenceChapitre(id));"
+    # lancement des requêtes
+    c.execute(str_tablesimple('competenceType'))
+    c.execute(str_tablesimple('competenceCahpitre'))
+    c.execute(str_tableCompetences)
+
+## Ajout / retrait / lecture dans les tables simples (juste une liste avec des noms) :
+#      competenceType
+#      competenceChapitre
+#      classes
+#      devoirType
+
+def ajoutSimpleTable(conn:s.Connection, table:str, nom:str) -> None:
+    """
+    Fonction pour ajouter des entrées
+    """
+    c = conn.cursor()
+    c.execute("insert into {} (nom) values ('{}');".format(table,nom))
     conn.commit()
 
-def retraitCompétenceType(conn:s.Connection, nom:str) -> None:
+def retraitSimpleTable(conn:s.Connection, table:str, nom:str) -> None:
     """
     Fonction pour retirer des types de compétences
     """
     c = conn.cursor()
-    c.execute("delete from competenceType where nom like '{}';".format(nom))
+    c.execute("delete from {} where nom like '{}';".format(table,nom))
     conn.commit()
 
-def récupèreCompétenceTypes(conn:s.Connection) -> list:
+def récupèreSimpleTable(conn:s.Connection, table:str) -> list:
     """
     Fonction qui renvoie l'ensemble des types de compétences dans une liste de str
     """
     c = conn.cursor()
-    c.execute("select nom from competenceType;")
+    c.execute("select nom from {};".format(table))
     a = [ t[0] for t in c.fetchall() ]
     return(a)
+
+# Helpers
+ajoutCompétenceType = lambda conn,nom: ajoutSimpleTable(conn,'competenceType',nom)
+retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
+récupèreCompétenceTypes = lambda conn: récupèreSimpleTable(conn,'competenceType')
 
 
 ## Partie main pour tests
@@ -69,6 +96,7 @@ if __name__ == '__main__':
     # test d'ouverture et affichage du schema
     nom_db = 'competences_test.db'
     conn = ouvrirDB(nom_db)
+    créerSchéma(conn)
     c = conn.cursor()
     c.execute("SELECT name FROM sqlite_master WHERE type='table';")
     a = c.fetchall()  # forme non simplement utilisable des noms des tables

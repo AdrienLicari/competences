@@ -31,7 +31,7 @@ def fermerDB(conn:s.Connection) -> None:
     conn.close()
 
 
-## Création du schéma si besoin est
+## Création du schéma si besoin est (généralement pour les tests)
 
 def créerSchéma(conn:s.Connection) -> None:
     """
@@ -55,14 +55,6 @@ def créerSchéma(conn:s.Connection) -> None:
 #      classes
 #      devoirType
 
-def ajoutSimpleTable(conn:s.Connection, table:str, nom:str) -> None:
-    """
-    Fonction pour ajouter des entrées
-    """
-    c = conn.cursor()
-    c.execute("insert into {} (nom) values ('{}');".format(table,nom))
-    conn.commit()
-
 def retraitSimpleTable(conn:s.Connection, table:str, nom:str) -> None:
     """
     Fonction pour retirer des types de compétences
@@ -81,13 +73,55 @@ def récupèreSimpleTable(conn:s.Connection, table:str) -> list:
     return(a)
 
 # Helpers
-ajoutCompétenceType = lambda conn,nom: ajoutSimpleTable(conn,'competenceType',nom)
 retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
 récupèreCompétenceTypes = lambda conn: récupèreSimpleTable(conn,'competenceType')
 
-ajoutCompétenceChapitre = lambda conn,nom: ajoutSimpleTable(conn,'competenceChapitre',nom)
 retraitCompétenceChapitre = lambda conn,nom: retraitSimpleTable(conn,'competenceChapitre',nom)
 récupèreCompétenceChapitres = lambda conn: récupèreSimpleTable(conn,'competenceChapitre')
+
+
+## Ajout / retrait dans une table avec des champs reliées à d'autres tables :
+
+def ajouteDansTable(conn:s.Connection, table:str, vals:dict) -> None:
+    """
+    Permet d'ajouter une ligne dans une table, éventuellement reliée à d'autres tables.
+    Args:
+        conn: l'objet sqlite3.Connection permettant d'accéder à la BDD
+        table: str représentant le nom de la table
+        vals: dictionnaire correspondant aux entrées ; la clé est le nom du champs, la valeur est
+                la valeur à insérer OU un tuple (autreTable,champ,nom) permettant de récupérer un id
+                relié en ue de jointures
+    """
+    c = conn.cursor()
+    str_champs, str_valeurs = """(""","""("""
+    for champ,valeur in vals.items():
+        str_champs += """{},""".format(champ)
+        if isinstance(valeur,tuple):  # cas où l'élément est en lien avec une autre table
+            autreTable, autreChamp, autreValeur = valeur
+            if isinstance(autreValeur,str):
+                c.execute("""select id from {} where {} is "{}";""".format(autreTable,autreChamp,autreValeur))
+            else:
+                c.execute("""select id from {} where {} is "{}";""".format(autreTable,autreChamp,autreValeur))
+            autreId = c.fetchall()[0][0]
+            str_valeurs += """{},""".format(autreId)
+        else:
+            if isinstance(valeur,str):
+                str_valeurs += """"{}",""".format(valeur)
+            else:
+                str_valeurs += """{},""".format(valeur)
+    str_requete = """insert into {} """.format(table) + str_champs[:-1] + \
+      """) values """ + str_valeurs[:-1] + """);"""
+    c.execute(str_requete)
+    conn.commit()
+
+# Helpers
+ajoutCompétenceType = lambda conn,nom: ajouteDansTable(conn,'competenceType',{'nom':nom})
+ajoutCompétenceChapitre = lambda conn,nom: ajouteDansTable(conn,'competenceChapitre',{'nom':nom})
+ajoutCompétence = lambda conn,nom,chap,typ: \
+  ajouteDansTable(conn,'competence',\
+                      {'nom':nom,\
+                        'competenceTypeId':('competenceType','nom',typ),\
+                        'competenceChapitreId':('competenceChapitre','nom',chap)})
 
 
 ## Partie main pour tests
@@ -98,19 +132,23 @@ def afficherSéparateur() -> None:
 
 if __name__ == '__main__':
     # test d'ouverture et affichage du schema
+    afficherSéparateur()
+    print("\t=== Nettoyage et initialisation de la base de tests ===")
     nom_db = 'competences_test.db'
     conn = ouvrirDB(nom_db)
     afficherSéparateur()
     c = conn.cursor()
     c.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    for tab in ['competence','competenceType','competenceChapitre']:
+        try:
+            c.execute("DROP table {};".format(tab))
+        except:
+            pass
+    créerSchéma(conn)
+    c.execute("SELECT name FROM sqlite_master WHERE type='table';")
     a = c.fetchall()  # forme non simplement utilisable des noms des tables
-    if len(a) < 2:
-        créerSchéma(conn)
-        c.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        a = c.fetchall()  # forme non simplement utilisable des noms des tables
     a = [ t[0] for t in a[1:] ]  # on enlève la table sqlite_sequence et on extrait les noms
-    print("Liste des tables dans la DB :\n", a)
-    afficherSéparateur()
+    print("\t=== Liste des tables dans la DB ===\n", a)
     for tab in a:
         c.execute("pragma table_info({})".format(tab))
         cols = c.fetchall()
@@ -119,7 +157,7 @@ if __name__ == '__main__':
             print("\t * {}".format(col))
     afficherSéparateur()
     # Test de gestion de la table des types de compétences
-    print("Test de l'interface avec la table compétenceType")
+    print("\t=== Test de l'interface avec la table compétenceType ===")
     tab = ['technique','analyse','connaissance']
     print("lignes existantes :",récupèreCompétenceTypes(conn))
     for compTp in tab:
@@ -129,9 +167,11 @@ if __name__ == '__main__':
     print("lignes existantes :",récupèreCompétenceTypes(conn))
     for t in récupèreCompétenceTypes(conn):
         retraitCompétenceType(conn,t)
+    for compTp in tab:
+        ajoutCompétenceType(conn,compTp)
     afficherSéparateur()
     # Test de gestion de la table des chapitres de compétences
-    print("Test de l'interface avec la table compétenceChapitre")
+    print("\t=== Test de l'interface avec la table compétenceChapitre ===")
     tab = ['généralités','mécanique','transformations chimiques']
     print("lignes existantes :",récupèreCompétenceChapitres(conn))
     for compTp in tab:
@@ -141,5 +181,42 @@ if __name__ == '__main__':
     print("lignes existantes :",récupèreCompétenceChapitres(conn))
     for t in récupèreCompétenceChapitres(conn):
         retraitCompétenceChapitre(conn,t)
+    for compTp in tab:
+        ajoutCompétenceChapitre(conn,compTp)
+    afficherSéparateur()
+    # Test de la table tableComplexeTest, uniquement pour tester indépendamment
+    # la capacité à insérer sans lien avec d'autres tables
+    print("\t=== Test de l'interface avec la table tableComplexeTest ===")
+    try:
+        str_tableComplexeTest = "create table tableComplexeTest (id integer primary key autoincrement, nom text, num int, chiffre real);"
+        c.execute(str_tableComplexeTest)
+    except Exception as ex:
+        print("Info : Message d'exception reçu à la tentative de créer la table tableComplexeTest")
+#        print('\t'+ex)
+    tab = [{'nom':'pouet','num':3,'chiffre':42.0},\
+               {'nom':'bidule','num':1,'chiffre':4.6},\
+               {'nom':'truc','num':42,'chiffre':0.01}]
+    for d in tab:
+        ajouteDansTable(conn,'tableComplexeTest',d)
+    conn.commit()
+    c.execute("select * from tableComplexeTest;")
+    print("Contenu de la table tableComplexeTest après ajouts :")
+    for tu in c.fetchall():
+        print(tu)
+    c.execute("drop table tableComplexeTest;")
+    afficherSéparateur()
+    # Test des insertions avec liens entre tables
+    print("\t=== Test de l'interface avec competences ===")
+    ajoutCompétence(conn,"Vérifier l'homogénéité","généralités","technique")
+    ajoutCompétence(conn,"Écrire la loi de Newton","mécanique","technique")
+    ajoutCompétence(conn,"Interpréter une mouvement par principe d'inertie","mécanique","analyse")
+    c.execute("select * from competence;")
+    print("Contenu de la table competence après ajouts :")
+    for tu in c.fetchall():
+        print(tu)
+    try:
+        ajoutCompétence(conn,"Vérifier l'homogénéité","généralités","pouet")
+    except Exception as ex:
+        print("Exception levée dans le cas d'une clé externe fantaisiste")
     afficherSéparateur()
     fermerDB(conn)

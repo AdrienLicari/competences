@@ -73,10 +73,10 @@ def récupèreSimpleTable(conn:s.Connection, table:str) -> list:
     return(a)
 
 # Helpers
-retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
+#retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
 récupèreCompétenceTypes = lambda conn: récupèreSimpleTable(conn,'competenceType')
 
-retraitCompétenceChapitre = lambda conn,nom: retraitSimpleTable(conn,'competenceChapitre',nom)
+#retraitCompétenceChapitre = lambda conn,nom: retraitSimpleTable(conn,'competenceChapitre',nom)
 récupèreCompétenceChapitres = lambda conn: récupèreSimpleTable(conn,'competenceChapitre')
 
 
@@ -114,14 +114,29 @@ def ajouteDansTable(conn:s.Connection, table:str, vals:dict) -> None:
     c.execute(str_requete)
     conn.commit()
 
+def retraitDeTable(conn:s.Connection, table:str, condition:tuple) -> None:
+    """
+    Retire des lignes dans une table. La condition SQL est une paire clé-valeur utilisée pour le retrait.
+    """
+    c = conn.cursor()
+    c.execute("delete from {} where {} like '{}';".format(table,condition[0],condition[1]))
+    conn.commit()
+
+
+
 # Helpers
 ajoutCompétenceType = lambda conn,nom: ajouteDansTable(conn,'competenceType',{'nom':nom})
+retraitCompétenceType = lambda conn,nom: retraitDeTable(conn,'competenceType',('nom',nom))
+
 ajoutCompétenceChapitre = lambda conn,nom: ajouteDansTable(conn,'competenceChapitre',{'nom':nom})
+retraitCompétenceChapitre = lambda conn,nom: retraitDeTable(conn,'competenceChapitre',('nom',nom))
+
 ajoutCompétence = lambda conn,nom,chap,typ: \
   ajouteDansTable(conn,'competence',\
                       {'nom':nom,\
                         'competenceTypeId':('competenceType','nom',typ),\
                         'competenceChapitreId':('competenceChapitre','nom',chap)})
+retraitCompétence = lambda conn,nom: retraitDeTable(conn,'competence',('nom',nom))
 
 
 ## Partie main pour tests
@@ -214,6 +229,12 @@ if __name__ == '__main__':
     print("Contenu de la table competence après ajouts :")
     for tu in c.fetchall():
         print(tu)
+    retraitCompétence(conn,"Écrire la loi de Newton")
+    c.execute("select * from competence;")
+    print("Contenu de la table competence après un retrait :")
+    for tu in c.fetchall():
+        print(tu)
+    ajoutCompétence(conn,"Écrire la loi de Newton","mécanique","technique")
     try:
         ajoutCompétence(conn,"Vérifier l'homogénéité","généralités","pouet")
     except Exception as ex:

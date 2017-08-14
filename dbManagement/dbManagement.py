@@ -127,16 +127,13 @@ def récupèreCompétencesComplet(conn:s.Connection) -> list:
     associé
     """
     c = conn.cursor()
-    c.execute("select * from competence;")
-    a = c.fetchall()
-    l = []
-    for idC,nom,typ,chap in a:
-        c.execute("select nom from competenceType where id = {};".format(typ))
-        nomTyp = c.fetchall()[0][0]
-        c.execute("select nom from competenceChapitre where id = {};".format(chap))
-        nomChap = c.fetchall()[0][0]
-        l.append((nom,nomTyp,nomChap))
-    return(l)
+    sql_str = "select competence.nom,competenceType.nom,competenceChapitre.nom " + \
+      "from competence join competenceType on competenceTypeId = competenceType.id " + \
+      "join competenceChapitre on competenceChapitreId = competenceChapitre.id;"
+    c.execute(sql_str)
+    a = [ list(t) for t in c.fetchall()]
+    return(a)
+
 
 
 ## Partie main pour tests
@@ -240,6 +237,8 @@ if __name__ == '__main__':
     except Exception as ex:
         print("Exception levée dans le cas d'une clé externe fantaisiste")
     print("lignes existantes :",récupèreCompétences(conn))
-    print(récupèreCompétencesComplet(conn))
+    print("récupération des infos liées:")
+    for a in récupèreCompétencesComplet(conn):
+        print(a)
     afficherSéparateur()
     fermerDB(conn)

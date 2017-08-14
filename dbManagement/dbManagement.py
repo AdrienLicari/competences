@@ -119,6 +119,24 @@ ajoutCompétence = lambda conn,nom,chap,typ: \
                         'competenceTypeId':('competenceType','nom',typ),\
                         'competenceChapitreId':('competenceChapitre','nom',chap)})
 retraitCompétence = lambda conn,nom: retraitDeTable(conn,'competence',('nom',nom))
+récupèreCompétences = lambda conn: récupèreChamps(conn,'competence',['nom'])
+
+def récupèreCompétencesComplet(conn:s.Connection) -> list:
+    """
+    Fonction qui renvoie les str correspondant aux compétences, avec à chaque fois leur type et chapitre
+    associé
+    """
+    c = conn.cursor()
+    c.execute("select * from competence;")
+    a = c.fetchall()
+    l = []
+    for idC,nom,typ,chap in a:
+        c.execute("select nom from competenceType where id = {};".format(typ))
+        nomTyp = c.fetchall()[0][0]
+        c.execute("select nom from competenceChapitre where id = {};".format(chap))
+        nomChap = c.fetchall()[0][0]
+        l.append((nom,nomTyp,nomChap))
+    return(l)
 
 
 ## Partie main pour tests
@@ -221,5 +239,7 @@ if __name__ == '__main__':
         ajoutCompétence(conn,"Vérifier l'homogénéité","généralités","pouet")
     except Exception as ex:
         print("Exception levée dans le cas d'une clé externe fantaisiste")
+    print("lignes existantes :",récupèreCompétences(conn))
+    print(récupèreCompétencesComplet(conn))
     afficherSéparateur()
     fermerDB(conn)

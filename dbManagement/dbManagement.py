@@ -47,12 +47,26 @@ def créerSchéma(conn:s.Connection) -> None:
     str_tableÉtudiants = "CREATE TABLE etudiants" + \
       "(id integer primary key autoincrement, classeId int, nom text, prenom text, " + \
       "foreign key(classeId) references classes(id));"
+    str_tableDevoirs = "CREATE TABLE devoir " + \
+      "(id integer primary key autoincrement, typeId int, numero int, date text, classeId int, " + \
+      "foreign key(typeId) references devoirType(id), foreign key(classeId) references classes(id));"
+    str_tableQuestions = "CREATE TABLE questions " + \
+      "(id integer primary key autoincrement, devoirId int, nom text, coefficient int, " + \
+      "foreign key(devoirId) references devoir(id));"
+    str_tableQuestionsCompétences = "CREATE TABLE questionsCompetences " + \
+      "(id integer primary key autoincrement, questionsId int, competenceId int, " + \
+      "foreign key(questionsId) references questions(id), foreign key(competenceId) references competence(id));"
     # lancement des requêtes
     c.execute(str_tablesimple('competenceType'))
     c.execute(str_tablesimple('competenceChapitre'))
     c.execute(str_tableCompetences)
     c.execute(str_tablesimple('classes'))
     c.execute(str_tableÉtudiants)
+    c.execute(str_tablesimple('devoirType'))
+    c.execute(str_tableDevoirs)
+    c.execute(str_tableQuestions)
+    c.execute(str_tableQuestionsCompétences)
+
 
 ## Ajout / retrait dans une table
 
@@ -166,6 +180,44 @@ def récupèreÉtudiants(conn:s.Connection,classe:str) -> list:
     a = [ "{} {}".format(t[1],t[0]) for t in c.fetchall() ]
     return(a)
 
+ajoutTypeDevoir = lambda conn,nom: ajouteDansTable(conn,'devoirType',{'nom':nom})
+récupèreTypesDevoirs = lambda conn: récupèreChamps(conn,'devoirType',['nom'])
+ajoutDevoir = lambda conn,typ,numero,date,classe: \
+  ajouteDansTable(conn,'devoir',{'numero':numero,'date':date, \
+                                     'typeId':('devoirType','nom',typ),'classeId':('classes','nom',classe)})
+def récupèreDevoirs(conn:s.Connection) -> list:
+    """ Fonction qui récupère l'ensemble des devoirs """
+    c = conn.cursor()
+    sql_str = "select devoir.numero,devoirType.nom,classes.nom,devoir.date from devoir " + \
+      "join classes on classeId = classes.id join devoirType on classeId = classes.id " + \
+      "order by devoir.date;"
+    c.execute(sql_str)
+    a = [ list(t)[1:] for t in c.fetchall() ]
+    return(a)
+
+def créerQuestions(conn:s.Connection, devoir:int, liste:list) -> None:
+    """
+    Prend en paramètre une liste de tuples (nomDeQuestion,coef,[compétences]).
+    Le devoir est identifié par son numéro id.
+    """
+    c = conn.cursor()
+    for q in liste:
+        ajouteDansTable(conn,"questions",{'nom':q[0],'coefficient':q[1],'devoirId':devoir})
+        c.execute("select id from questions where nom like '{}';".format(q[0]))
+        q_id = c.fetchall()[0][0]
+        for comp in q[2]:
+            ajouteDansTable(conn,"questionsCompetences",{"questionsId":q_id,"competenceId":comp})
+def récupérerQuestions(conn:s.Connection, devoir:int) -> list:
+    """
+    Prend en paramètre un id de devoir et renvoie la liste des questions, coefficients et compétences associées
+    """
+    c = conn.cursor()
+    c.execute("select id,nom,coefficient from questions where devoirId = {};".format(devoir))
+    l = [ list(t) for t in c.fetchall() ]
+    for a in l:
+        c.execute("select competenceId from questionsCompetences where questionsId = {};".format(a[0]))
+        a.append([t[0] for t in c.fetchall()])
+    return(l)
 
 ## Partie main pour tests
 
@@ -227,28 +279,6 @@ if __name__ == '__main__':
     for compTp in tab:
         ajoutCompétenceChapitre(conn,compTp)
     afficherSéparateur()
-    # Test de la table tableComplexeTest, uniquement pour tester indépendamment
-    # la capacité à insérer sans lien avec d'autres tables
-    print("\t=== Test de l'interface avec la table tableComplexeTest ===")
-    try:
-        str_tableComplexeTest = "create table tableComplexeTest " + \
-          "(id integer primary key autoincrement, nom text, num int, chiffre real);"
-        c.execute(str_tableComplexeTest)
-    except Exception as ex:
-        print("Info : Message d'exception reçu à la tentative de créer la table tableComplexeTest")
-#        print('\t'+ex)
-    tab = [{'nom':'pouet','num':3,'chiffre':42.0},\
-               {'nom':'bidule','num':1,'chiffre':4.6},\
-               {'nom':'truc','num':42,'chiffre':0.01}]
-    for d in tab:
-        ajouteDansTable(conn,'tableComplexeTest',d)
-    conn.commit()
-    c.execute("select * from tableComplexeTest;")
-    print("Contenu de la table tableComplexeTest après ajouts :")
-    for tu in c.fetchall():
-        print(tu)
-    c.execute("drop table tableComplexeTest;")
-    afficherSéparateur()
     # Test des insertions avec liens entre tables
     print("\t=== Test de l'interface avec competences ===")
     ajoutCompétence(conn,"Vérifier l'homogénéité","généralités","technique")
@@ -287,5 +317,18 @@ if __name__ == '__main__':
     ajoutÉtudiant(conn,"Bazin","Jérémy","MPSI")
     retraitÉtudiant(conn,"Gourgues")
     print("Nouveaux étudiants dans la MPSI :",récupèreÉtudiants(conn,"MPSI"))
+    afficherSéparateur()
+    # Tables des devoirs
+    print("\t=== Test de l'interface avec les devoirs ===")
+    ajoutTypeDevoir(conn,'DS')
+    ajoutTypeDevoir(conn,'Interro')
+    print("Les types de devoirs accessibles sont :", récupèreTypesDevoirs(conn))
+    ajoutDevoir(conn,"DS",1,"20.09.2017","MPSI")
+    ajoutDevoir(conn,"DS",2,"20.10.2017","MPSI")
+    ajoutDevoir(conn,"Interro",1,"15.09.2017","MPSI")
+    print("Liste des devoirs :", récupèreDevoirs(conn))
+    questions = [('1.a',2,[1,3]),('1.b',1,[1,4]),('2',2,[1])]
+    créerQuestions(conn,1,questions)
+    print(récupérerQuestions(conn,1))
     afficherSéparateur()
     fermerDB(conn)

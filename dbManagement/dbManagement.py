@@ -49,38 +49,7 @@ def créerSchéma(conn:s.Connection) -> None:
     c.execute(str_tablesimple('competenceChapitre'))
     c.execute(str_tableCompetences)
 
-## Ajout / retrait / lecture dans les tables simples (juste une liste avec des noms) :
-#      competenceType
-#      competenceChapitre
-#      classes
-#      devoirType
-
-def retraitSimpleTable(conn:s.Connection, table:str, nom:str) -> None:
-    """
-    Fonction pour retirer des types de compétences
-    """
-    c = conn.cursor()
-    c.execute("delete from {} where nom like '{}';".format(table,nom))
-    conn.commit()
-
-def récupèreSimpleTable(conn:s.Connection, table:str) -> list:
-    """
-    Fonction qui renvoie l'ensemble des types de compétences dans une liste de str
-    """
-    c = conn.cursor()
-    c.execute("select nom from {};".format(table))
-    a = [ t[0] for t in c.fetchall() ]
-    return(a)
-
-# Helpers
-#retraitCompétenceType = lambda conn,nom: retraitSimpleTable(conn,'competenceType',nom)
-récupèreCompétenceTypes = lambda conn: récupèreSimpleTable(conn,'competenceType')
-
-#retraitCompétenceChapitre = lambda conn,nom: retraitSimpleTable(conn,'competenceChapitre',nom)
-récupèreCompétenceChapitres = lambda conn: récupèreSimpleTable(conn,'competenceChapitre')
-
-
-## Ajout / retrait dans une table avec des champs reliées à d'autres tables :
+## Ajout / retrait dans une table
 
 def ajouteDansTable(conn:s.Connection, table:str, vals:dict) -> None:
     """
@@ -90,7 +59,7 @@ def ajouteDansTable(conn:s.Connection, table:str, vals:dict) -> None:
         table: str représentant le nom de la table
         vals: dictionnaire correspondant aux entrées ; la clé est le nom du champs, la valeur est
                 la valeur à insérer OU un tuple (autreTable,champ,nom) permettant de récupérer un id
-                relié en ue de jointures
+                relié en vue de jointures
     """
     c = conn.cursor()
     str_champs, str_valeurs = """(""","""("""
@@ -101,7 +70,7 @@ def ajouteDansTable(conn:s.Connection, table:str, vals:dict) -> None:
             if isinstance(autreValeur,str):
                 c.execute("""select id from {} where {} is "{}";""".format(autreTable,autreChamp,autreValeur))
             else:
-                c.execute("""select id from {} where {} is "{}";""".format(autreTable,autreChamp,autreValeur))
+                c.execute("""select id from {} where {} is {};""".format(autreTable,autreChamp,autreValeur))
             autreId = c.fetchall()[0][0]
             str_valeurs += """{},""".format(autreId)
         else:
@@ -122,14 +91,27 @@ def retraitDeTable(conn:s.Connection, table:str, condition:tuple) -> None:
     c.execute("delete from {} where {} like '{}';".format(table,condition[0],condition[1]))
     conn.commit()
 
+def récupèreChamps(conn:s.Connection, table:str, champs:list) -> list:
+    """
+    Fonction qui renvoie l'ensemble des champs demandés pour lignes de la table demandée.
+    """
+    c = conn.cursor()
+    str_chps = ""
+    for ch in champs:
+        str_chps += "{},".format(ch)
+    c.execute("select {} from {};".format(str_chps[:-1],table))
+    a = [ t[0] for t in c.fetchall() ]
+    return(a)
 
 
 # Helpers
 ajoutCompétenceType = lambda conn,nom: ajouteDansTable(conn,'competenceType',{'nom':nom})
 retraitCompétenceType = lambda conn,nom: retraitDeTable(conn,'competenceType',('nom',nom))
+récupèreCompétenceTypes = lambda conn: récupèreChamps(conn,'competenceType',['nom'])
 
 ajoutCompétenceChapitre = lambda conn,nom: ajouteDansTable(conn,'competenceChapitre',{'nom':nom})
 retraitCompétenceChapitre = lambda conn,nom: retraitDeTable(conn,'competenceChapitre',('nom',nom))
+récupèreCompétenceChapitres = lambda conn: récupèreChamps(conn,'competenceChapitre',['nom'])
 
 ajoutCompétence = lambda conn,nom,chap,typ: \
   ajouteDansTable(conn,'competence',\

@@ -44,10 +44,15 @@ def créerSchéma(conn:s.Connection) -> None:
     str_tableCompetences = "CREATE TABLE competence" + \
       "(id integer primary key autoincrement, nom text, competenceTypeId int, competenceChapitreId int," + \
       "foreign key(competenceTypeId) references competenceType(id), foreign key(competenceChapitreId) references competenceChapitre(id));"
+    str_tableÉtudiants = "CREATE TABLE etudiants" + \
+      "(id integer primary key autoincrement, classeId int, nom text, prenom text, " + \
+      "foreign key(classeId) references classes(id));"
     # lancement des requêtes
     c.execute(str_tablesimple('competenceType'))
     c.execute(str_tablesimple('competenceChapitre'))
     c.execute(str_tableCompetences)
+    c.execute(str_tablesimple('classes'))
+    c.execute(str_tableÉtudiants)
 
 ## Ajout / retrait dans une table
 
@@ -91,7 +96,7 @@ def retraitDeTable(conn:s.Connection, table:str, condition:tuple) -> None:
     c.execute("delete from {} where {} like '{}';".format(table,condition[0],condition[1]))
     conn.commit()
 
-def récupèreChamps(conn:s.Connection, table:str, champs:list) -> list:
+def récupèreChamps(conn:s.Connection, table:str, champs:list, orderby:str = None) -> list:
     """
     Fonction qui renvoie l'ensemble des champs demandés pour lignes de la table demandée.
     """
@@ -99,7 +104,10 @@ def récupèreChamps(conn:s.Connection, table:str, champs:list) -> list:
     str_chps = ""
     for ch in champs:
         str_chps += "{},".format(ch)
-    c.execute("select {} from {};".format(str_chps[:-1],table))
+    str_sql = "select {} from {};".format(str_chps[:-1],table)
+    if orderby is not None:
+        str_sql = str_sql[:-1] + " order by {};".format(orderby)
+    c.execute(str_sql)
     a = [ t[0] for t in c.fetchall() ]
     return(a)
 
@@ -120,7 +128,6 @@ ajoutCompétence = lambda conn,nom,chap,typ: \
                         'competenceChapitreId':('competenceChapitre','nom',chap)})
 retraitCompétence = lambda conn,nom: retraitDeTable(conn,'competence',('nom',nom))
 récupèreCompétences = lambda conn: récupèreChamps(conn,'competence',['nom'])
-
 def récupèreCompétencesComplet(conn:s.Connection) -> list:
     """
     Fonction qui renvoie les str correspondant aux compétences, avec à chaque fois leur type et chapitre
@@ -134,6 +141,30 @@ def récupèreCompétencesComplet(conn:s.Connection) -> list:
     a = [ list(t) for t in c.fetchall()]
     return(a)
 
+ajoutClasse = lambda conn,nom: ajouteDansTable(conn,'classes',{'nom':nom})
+retraitClasse = lambda conn,nom: retraitDeTable(conn,'classes',('nom',nom))
+récupèreClasses = lambda conn: récupèreChamps(conn,'classes',['nom'])
+
+ajoutÉtudiant = lambda conn,nom,prenom,classe: ajouteDansTable(conn,'etudiants', \
+                                                         {'nom':nom,'prenom':prenom, \
+                                                              'classeId':('classes','nom',classe)})
+def ajoutListeÉtudiants(conn:s.Connection, liste:list, nomClasse:str) -> None:
+    """
+    Ajoute une liste complète d'étudiants dans la classe proposée. La liste contient des
+    paires (nom,prenom)
+    """
+    for nom,prenom in liste:
+        ajoutÉtudiant(conn,nom,prenom,nomClasse)
+
+retraitÉtudiant = lambda conn,nom: retraitDeTable(conn,'etudiants',('nom',nom))
+def récupèreÉtudiants(conn:s.Connection,classe:str) -> list:
+    """ Fonction qui récupère l'ensemble des étudiants d'une classe """
+    c = conn.cursor()
+    sql_str = "select etudiants.nom,etudiants.prenom from etudiants join classes on classeId = classes.id " + \
+      "where classes.nom like '{}' order by etudiants.nom;".format(classe)
+    c.execute(sql_str)
+    a = [ "{} {}".format(t[1],t[0]) for t in c.fetchall() ]
+    return(a)
 
 
 ## Partie main pour tests
@@ -200,7 +231,8 @@ if __name__ == '__main__':
     # la capacité à insérer sans lien avec d'autres tables
     print("\t=== Test de l'interface avec la table tableComplexeTest ===")
     try:
-        str_tableComplexeTest = "create table tableComplexeTest (id integer primary key autoincrement, nom text, num int, chiffre real);"
+        str_tableComplexeTest = "create table tableComplexeTest " + \
+          "(id integer primary key autoincrement, nom text, num int, chiffre real);"
         c.execute(str_tableComplexeTest)
     except Exception as ex:
         print("Info : Message d'exception reçu à la tentative de créer la table tableComplexeTest")
@@ -240,5 +272,20 @@ if __name__ == '__main__':
     print("récupération des infos liées:")
     for a in récupèreCompétencesComplet(conn):
         print(a)
+    afficherSéparateur()
+    # Tables des classes et des élèves
+    print("\t=== Test de l'interface avec les classes et les étudiants ===")
+    ajoutClasse(conn,"MPSI")
+    ajoutClasse(conn,"MP")
+    ajoutClasse(conn,"PSI")
+    print("classes existantes :",récupèreClasses(conn))
+    retraitClasse(conn,"PSI")
+    print("classes existantes après retrait de la PSI :",récupèreClasses(conn))
+    listeDépart = [('Alp','Selin'), ('Gourgues','Maxime'), ('Morceaux','Jérémy')]
+    ajoutListeÉtudiants(conn,listeDépart,'MPSI')
+    print("Étudiants dans la MPSI :",récupèreÉtudiants(conn,"MPSI"))
+    ajoutÉtudiant(conn,"Bazin","Jérémy","MPSI")
+    retraitÉtudiant(conn,"Gourgues")
+    print("Nouveaux étudiants dans la MPSI :",récupèreÉtudiants(conn,"MPSI"))
     afficherSéparateur()
     fermerDB(conn)

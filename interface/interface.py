@@ -7,22 +7,19 @@ Module gérant l'interface graphique.
 
 ## Temporaire : données hardcodées pour la phase de mise en place / tests
 # La mise en place de ces schémas est la même que pour la BDD
-data_classes = [[0,"Toutes"],  # id,nom
-                    [1,"MPSI"],
-                    [2,"MP"],
-                    [3,"PSI"]]
-data_étudiants = [[1,1,"Alp","Selin"],  # id, idClasse, nom, prénom
-                      [2,1,"Bazin","Jérémy"],
-                      [3,1,"Gourgues","Maxime"],
-                      [4,1,"Morceaux","Jérémy"],
-                      [5,1,"Dias","Léo"],
-                      [6,2,"Chevasson","Raphaël"],
-                      [7,2,"Clémenceau","Sandra"],
-                      [8,2,"Hubert","Olive"],
-                      [9,2,"Bornet","Clément"],
-                      [10,3,"Grither","Noëmie"],
-                      [11,3,"Berdery","Mathieu"],
-                      [12,3,"Milhem","William"]]
+data_classes = ["Toutes","MPSI","MP","PSI"]
+data_étudiants = [["MPSI","Alp","Selin"],  # id, idClasse, nom, prénom
+                      ["MPSI","Bazin","Jérémy"],
+                      ["MPSI","Morceaux","Jérémy"],
+                      ["MPSI","Dias","Léo"],
+                      ["MPSI","Gourgues","Maxime"],
+                      ["MP","Chevasson","Raphaël"],
+                      ["MP","Clémenceau","Sandra"],
+                      ["MP","Hubert","Olive"],
+                      ["MP","Bornet","Clément"],
+                      ["PSI","Grither","Noëmie"],
+                      ["PSI","Berdery","Mathieu"],
+                      ["PSI","Milhem","William"]]
 
 ## imports
 import gi
@@ -36,6 +33,7 @@ class FenêtrePrincipale(object):
     """
     Classe gérant la fenêtre de l'application.
     """
+    # Fonctions d'ordre général
     def fermetureGlobale(self,*args):
         """
         Handler pour quitter la fenêtre.
@@ -52,6 +50,19 @@ class FenêtrePrincipale(object):
         dialogueErreur.run()
         dialogueErreur.destroy()
 
+    def demandeConfirmation(self,texte):
+        """
+        Une fonction utilisée pour demander une confirmation.
+        Renvoie True ou False.
+        """
+        dialogueConf = Gtk.MessageDialog(self.fenêtrePrincipale, 0, Gtk.MessageType.QUESTION, \
+                    Gtk.ButtonsType.OK_CANCEL, "Confirmation")
+        dialogueConf.format_secondary_text(texte)
+        réponse = (dialogueConf.run() == Gtk.ResponseType.OK)
+        dialogueConf.destroy()
+        return(réponse)
+
+    # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
         """
         Fonction qui charge les classes dans les ListStore adaptés.
@@ -59,9 +70,8 @@ class FenêtrePrincipale(object):
         """
         # Peuplement à la main ; à modifier
         for cl in data_classes:
-            self.modèleClasses.append(cl)
+            self.modèleClasses.append([cl])
         self.builder.get_object("sélecteurClasse").set_active(0)
-        data_étudiants.sort(key=lambda elt: elt[2])
         for et in data_étudiants:
             self.modèleÉtudiants.append(et)
 
@@ -69,10 +79,9 @@ class FenêtrePrincipale(object):
         """
         Callback utilisé pour la création d'une nouvelle classe.
         """
-        # Construction de la boite de dialogue
         # Lancement de la boite de dialogue
         dialogue = self.builder.get_object("dialogueCréationClasse")
-        nomClasseEntrée = self.builder.get_object("dialogueCréationClasseEntréeTexte")
+        nomClasseEntrée = self.builder.get_object("saisieNouvelleClasse")
         # Utilisation de Entrée pour valider
         nomClasseEntrée.set_activates_default(True)
         boutonOk = dialogue.get_widget_for_response(response_id=Gtk.ResponseType.OK)
@@ -83,11 +92,10 @@ class FenêtrePrincipale(object):
         réponse = dialogue.run()
         nomClasse = nomClasseEntrée.get_text()
         if réponse == Gtk.ResponseType.OK:
-            if nomClasse in [ a[1] for a in self.modèleClasses ]:
+            if nomClasse in [ a[0] for a in self.modèleClasses ]:
                 self.affichageErreur("Le nom de classe que vous avez entré est déjà pris.")
             else:
-                nouveauId = max([ a[0] for a in self.modèleClasses ]) + 1
-                self.modèleClasses.append([nouveauId,nomClasse])
+                self.modèleClasses.append([nomClasse])
         dialogue.hide()
 
     def supprimerClasse(self,dummy):
@@ -98,33 +106,85 @@ class FenêtrePrincipale(object):
         dialogue = self.builder.get_object("dialogueSuppressionClasse")
         dialogue.show()
         réponse = dialogue.run()
-        iterClasse = self.builder.get_object("sélectionneurClasseÀSupprimer").get_active_iter()
         if réponse == Gtk.ResponseType.OK:
-            self.modèleClasses.remove(iterClasse)
+            iterClasse = self.builder.get_object("sélectionneurClasseÀSupprimer").get_active_iter()
+            nomClasse = self.builder.get_object("modèleClassesModifiables")[iterClasse][0]
+            if self.demandeConfirmation("Êtes-vous sûr de vouloir supprimer la classe {} " \
+                                         "ainsi que tous les étudiants qui la composent ?".format(nomClasse)):
+                it = self.builder.get_object("modèleClassesModifiables").convert_iter_to_child_iter(iterClasse)
+                self.modèleClasses.remove(it)
+                it = self.modèleÉtudiants.get_iter_first()
+                while it is not None and self.modèleÉtudiants.iter_is_valid(it):
+                    if self.modèleÉtudiants[it][0] == nomClasse:
+                        self.modèleÉtudiants.remove(it)
+                    else:
+                        it = self.modèleÉtudiants.iter_next(it)
         dialogue.hide()
+
+    def ajouterÉtudiant(self,dummy):
+        """
+        Callback utilisé pour la suppression d'un étudiant.
+        """
+        # Lancement de la boite de dialogue
+        dialogue = self.builder.get_object("dialogueCréationÉtudiant")
+        nomÉtudiantEntrée = self.builder.get_object("saisieNomNouvelÉtudiant")
+        prénomÉtudiantEntrée = self.builder.get_object("saisiePrénomNouvelÉtudiant")
+        # Utilisation de Entrée pour valider
+        nomÉtudiantEntrée.set_activates_default(True)
+        prénomÉtudiantEntrée.set_activates_default(True)
+        boutonOk = dialogue.get_widget_for_response(response_id=Gtk.ResponseType.OK)
+        boutonOk.set_can_default(True)
+        boutonOk.grab_default()
+        # Lancement de la boite de dialogue
+        dialogue.show()
+        réponse = dialogue.run()
+        nomÉtudiant = nomÉtudiantEntrée.get_text()
+        prénomÉtudiant = prénomÉtudiantEntrée.get_text()
+        iterClasse = self.builder.get_object("sélectionneurClasseNouvelÉtudiant").get_active_iter()
+        nomClasse = self.builder.get_object("modèleClassesModifiables")[iterClasse][0]
+        if réponse == Gtk.ResponseType.OK:
+            if (nomClasse,nomÉtudiant,prénomÉtudiant) in [ tuple(a) for a in self.modèleÉtudiants ]:
+                self.affichageErreur("L'étudiant proposé existe déjà.")
+            else:
+                self.modèleÉtudiants.append([nomClasse,nomÉtudiant,prénomÉtudiant])
+        dialogue.hide()
+
+    def supprimerÉtudiant(self,dummy):
+        """
+        Callback utilisé pour la suppression d'un étudiant.
+        """
+        modèle, itÉtudiant = self.builder.get_object("afficheurÉtudiants").get_selection().get_selected()
+        if itÉtudiant is None:
+            self.affichageErreur("Vous n'avez pas sélectionné d'étudiant")
+        else:
+            nom,prénom = modèle[itÉtudiant][1],modèle[itÉtudiant][2]
+            if self.demandeConfirmation("Voulez-vous supprimer l'étudiant {} {} ?".format(nom,prénom)):
+                iterInterm = modèle.convert_iter_to_child_iter(itÉtudiant)
+                iterFinal = self.builder.get_object("modèleÉtudiantsFiltré").convert_iter_to_child_iter(iterInterm)
+                self.modèleÉtudiants.remove(iterFinal)
 
     def changerClasseActive(self,sélecteur:Gtk.ComboBox):
         """
         Callback pour le changement de classe active.
         """
-        idClasse, classe = self.modèleClasses[sélecteur.get_active()]
-        self.classeActive = idClasse
+        nomClasse = self.modèleClasses[sélecteur.get_active()][0]
+        self.classeActive = nomClasse
         self.builder.get_object("modèleÉtudiantsFiltré").refilter()
 
     def filtreVisibilitéParClasse(self,model,it,data):
         """
         Fonction pour rendre visible uniquement les étudiants de la classe active
         """
-        if self.modèleClasses[self.classeActive][1] in ["Toutes","Tous"]:
+        if self.classeActive in ["Toutes","Tous"]:
             return(True)
-        return(model[it][1] == self.classeActive)
+        return(model[it][0] == self.classeActive)
 
     def filtreModifiables(self,model,it,data):
         """
-        Fonction pour rendre visible uniquement les entités modifiables ou supprimables. 
+        Fonction pour rendre visible uniquement les entités modifiables ou supprimables.
         Est utilisé dans le cas de modèles contenant l'entrée "Tous" pour l'exclure.
         """
-        if model[it][1] in ["Toutes","Tous"]:
+        if model[it][0] in ["Toutes","Tous"]:
             return(False)
         return(True)
 
@@ -132,7 +192,6 @@ class FenêtrePrincipale(object):
         """
         Constructeur
         """
-        # Chargmenet du glade
         # Chargement du glade
         self.gladefile = 'interface.glade'
         self.builder = Gtk.Builder()
@@ -141,22 +200,17 @@ class FenêtrePrincipale(object):
         # Récupération des objets utiles
         self.fenêtrePrincipale = self.builder.get_object("fenêtrePrincipale")
         # Création des objets de l'état : les classes, les étudiants
-        self.classeActive = 0
+        self.classeActive = "Toutes"
         self.modèleClasses = self.builder.get_object("modèleClasses")
         self.modèleÉtudiants = self.builder.get_object("modèleÉtudiants")
         # Mise en place de la vue des étudiants
         self.builder.get_object("modèleÉtudiantsFiltré").set_visible_func(self.filtreVisibilitéParClasse)
-        self.builder.get_object("modèleÉtudiantsClassé").set_sort_column_id(2,Gtk.SortType.ASCENDING)
         # Mise en place des exclusions de listes
         self.builder.get_object("modèleClassesModifiables").set_visible_func(self.filtreModifiables)
         # Chargement des données
         self.chargerClasses()
         # lancement
         self.fenêtrePrincipale.show()
-
-
-## Classe de la fenêtre popup test
-
 
 ## Tests
 if __name__ == '__main__':

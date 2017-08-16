@@ -4,8 +4,6 @@
   <requires lib="gtk+" version="3.20"/>
   <object class="GtkListStore" id="modèleClasses">
     <columns>
-      <!-- column-name idClasse -->
-      <column type="gint"/>
       <!-- column-name nomClasse -->
       <column type="gchararray"/>
     </columns>
@@ -25,23 +23,30 @@
       <column type="gint"/>
     </columns>
   </object>
+    <columns>
+      <column type="gint"/>
+      <column type="gint"/>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
   <object class="GtkListStore" id="modèleÉtudiants">
     <columns>
-      <!-- column-name idÉtudiant -->
-      <column type="gint"/>
-      <!-- column-name idClasse -->
-      <column type="gint"/>
+      <!-- column-name classe -->
+      <column type="gchararray"/>
       <!-- column-name nom -->
       <column type="gchararray"/>
       <!-- column-name prénom -->
       <column type="gchararray"/>
     </columns>
   </object>
-  <object class="GtkTreeModelSort" id="modèleÉtudiantsClassé">
     <property name="model">modèleÉtudiants</property>
   </object>
   <object class="GtkTreeModelFilter" id="modèleÉtudiantsFiltré">
-    <property name="child_model">modèleÉtudiantsClassé</property>
+    <property name="child_model">modèleÉtudiants</property>
+  </object>
+  <object class="GtkTreeModelSort" id="modèleÉtudiantsClassé">
+    <property name="model">modèleÉtudiantsFiltré</property>
   </object>
   <object class="GtkWindow" id="fenêtrePrincipale">
     <property name="can_focus">False</property>
@@ -216,6 +221,30 @@
                         <signal name="activate" handler="supprimerClasse" swapped="no"/>
                       </object>
                     </child>
+                    <child>
+                      <object class="GtkSeparatorMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label">Ajouter étudiant</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="ajouterÉtudiant" swapped="no"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
+                        <property name="label">Supprimer étudiant</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="supprimerÉtudiant" swapped="no"/>
+                      </object>
+                    </child>
                   </object>
                 </child>
               </object>
@@ -266,7 +295,7 @@
                 <child>
                   <object class="GtkCellRendererText" id="afficheurClasse"/>
                   <attributes>
-                    <attribute name="text">1</attribute>
+                    <attribute name="text">0</attribute>
                   </attributes>
                 </child>
               </object>
@@ -287,7 +316,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="vexpand">True</property>
-                    <property name="model">modèleÉtudiantsFiltré</property>
+                    <property name="model">modèleÉtudiantsClassé</property>
                     <property name="reorderable">True</property>
                     <property name="rules_hint">True</property>
                     <property name="enable_grid_lines">horizontal</property>
@@ -300,11 +329,11 @@
                         <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
-                        <property name="sort_column_id">2</property>
+                        <property name="sort_column_id">1</property>
                         <child>
                           <object class="GtkCellRendererText" id="afficheurNoms"/>
                           <attributes>
-                            <attribute name="text">2</attribute>
+                            <attribute name="text">1</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -315,11 +344,11 @@
                         <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
-                        <property name="sort_column_id">3</property>
+                        <property name="sort_column_id">2</property>
                         <child>
                           <object class="GtkCellRendererText" id="afficheurPrénoms"/>
                           <attributes>
-                            <attribute name="text">3</attribute>
+                            <attribute name="text">2</attribute>
                           </attributes>
                         </child>
                       </object>
@@ -442,7 +471,7 @@
               </packing>
             </child>
             <child>
-              <object class="GtkEntry" id="dialogueCréationClasseEntréeTexte">
+              <object class="GtkEntry" id="saisieNouvelleClasse">
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
               </object>
@@ -466,12 +495,151 @@
       <action-widget response="-5">button4</action-widget>
     </action-widgets>
   </object>
+  <object class="GtkDialog" id="dialogueCréationÉtudiant">
+    <property name="can_focus">False</property>
+    <property name="title" translatable="yes">Ajout d'un étudiant</property>
+    <property name="type_hint">dialog</property>
+    <property name="transient_for">fenêtrePrincipale</property>
+    <child internal-child="vbox">
+      <object class="GtkBox">
+        <property name="can_focus">False</property>
+        <property name="orientation">vertical</property>
+        <property name="spacing">2</property>
+        <child internal-child="action_area">
+          <object class="GtkButtonBox">
+            <property name="can_focus">False</property>
+            <property name="layout_style">end</property>
+            <child>
+              <object class="GtkButton" id="button5">
+                <property name="label">gtk-cancel</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_stock">True</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkButton" id="button6">
+                <property name="label">gtk-ok</property>
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="receives_default">True</property>
+                <property name="use_stock">True</property>
+              </object>
+              <packing>
+                <property name="expand">True</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">False</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkGrid">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Classe</property>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Nom</property>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Prénom</property>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBox" id="sélectionneurClasseNouvelÉtudiant">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="hexpand">True</property>
+                <property name="model">modèleClassesModifiables</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="saisieNomNouvelÉtudiant">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="saisiePrénomNouvelÉtudiant">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">2</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+    <action-widgets>
+      <action-widget response="-6">button5</action-widget>
+      <action-widget response="-5">button6</action-widget>
+    </action-widgets>
+  </object>
   <object class="GtkDialog" id="dialogueSuppressionClasse">
     <property name="can_focus">False</property>
     <property name="title" translatable="yes">Supprimer une classe</property>
-    <property name="window_position">center</property>
     <property name="destroy_with_parent">True</property>
-    <property name="type_hint">toolbar</property>
+    <property name="type_hint">dialog</property>
     <property name="transient_for">fenêtrePrincipale</property>
     <child internal-child="vbox">
       <object class="GtkBox">
@@ -545,7 +713,7 @@
                 <child>
                   <object class="GtkCellRendererText" id="nomClasse"/>
                   <attributes>
-                    <attribute name="text">1</attribute>
+                    <attribute name="text">0</attribute>
                   </attributes>
                 </child>
               </object>

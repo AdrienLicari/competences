@@ -13,19 +13,28 @@
   </object>
   <object class="GtkListStore" id="modèleCompétence">
     <columns>
-      <!-- column-name idCompétence -->
-      <column type="gint"/>
       <!-- column-name nom -->
       <column type="gchararray"/>
-      <!-- column-name idType -->
-      <column type="gint"/>
-      <!-- column-name idChapitre -->
-      <column type="gint"/>
+      <!-- column-name type -->
+      <column type="gchararray"/>
+      <!-- column-name chapitre -->
+      <column type="gchararray"/>
     </columns>
   </object>
+  <object class="GtkTreeModelFilter" id="modèleCompétenceFiltré">
+    <property name="child_model">modèleCompétence</property>
+  </object>
+  <object class="GtkTreeModelSort" id="modèleCompétenceClassé">
+    <property name="model">modèleCompétenceFiltré</property>
+  </object>
+  <object class="GtkListStore" id="modèleCompétenceChapitre">
     <columns>
-      <column type="gint"/>
-      <column type="gint"/>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+    </columns>
+  </object>
+  <object class="GtkListStore" id="modèleCompétenceType">
+    <columns>
       <!-- column-name nom -->
       <column type="gchararray"/>
     </columns>
@@ -39,8 +48,6 @@
       <!-- column-name prénom -->
       <column type="gchararray"/>
     </columns>
-  </object>
-    <property name="model">modèleÉtudiants</property>
   </object>
   <object class="GtkTreeModelFilter" id="modèleÉtudiantsFiltré">
     <property name="child_model">modèleÉtudiants</property>
@@ -324,14 +331,14 @@
                       <object class="GtkTreeSelection"/>
                     </child>
                     <child>
-                      <object class="GtkTreeViewColumn" id="colonneNoms">
+                      <object class="GtkTreeViewColumn">
                         <property name="title" translatable="yes">Nom</property>
                         <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
                         <property name="sort_column_id">1</property>
                         <child>
-                          <object class="GtkCellRendererText" id="afficheurNoms"/>
+                          <object class="GtkCellRendererText"/>
                           <attributes>
                             <attribute name="text">1</attribute>
                           </attributes>
@@ -339,14 +346,14 @@
                       </object>
                     </child>
                     <child>
-                      <object class="GtkTreeViewColumn" id="colonnePrénoms">
+                      <object class="GtkTreeViewColumn">
                         <property name="title" translatable="yes">Prénom</property>
                         <property name="clickable">True</property>
                         <property name="reorderable">True</property>
                         <property name="sort_indicator">True</property>
                         <property name="sort_column_id">2</property>
                         <child>
-                          <object class="GtkCellRendererText" id="afficheurPrénoms"/>
+                          <object class="GtkCellRendererText"/>
                           <attributes>
                             <attribute name="text">2</attribute>
                           </attributes>
@@ -373,6 +380,123 @@
               <packing>
                 <property name="left_attach">0</property>
                 <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="label" translatable="yes">Compétences</property>
+                <attributes>
+                  <attribute name="font-desc" value="&lt;Saisir une valeur&gt; 12"/>
+                </attributes>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+                <property name="width">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBox" id="sélecteurCompétenceChapitre">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="model">modèleCompétenceChapitre</property>
+                <signal name="changed" handler="changerFiltresCompétences" swapped="no"/>
+                <child>
+                  <object class="GtkCellRendererText" id="afficheurCompétenceChapitre"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+              <packing>
+                <property name="left_attach">2</property>
+                <property name="top_attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBox" id="sélecteurCompétenceType">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="model">modèleCompétenceType</property>
+                <signal name="changed" handler="changerFiltresCompétences" swapped="no"/>
+                <child>
+                  <object class="GtkCellRendererText" id="afficheurCompétenceType"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkScrolledWindow">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="shadow_type">in</property>
+                <child>
+                  <object class="GtkTreeView" id="afficheurCompétences">
+                    <property name="visible">True</property>
+                    <property name="can_focus">True</property>
+                    <property name="model">modèleCompétenceClassé</property>
+                    <child internal-child="selection">
+                      <object class="GtkTreeSelection"/>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn">
+                        <property name="title" translatable="yes">Nom</property>
+                        <property name="reorderable">True</property>
+                        <property name="sort_indicator">True</property>
+                        <property name="sort_column_id">0</property>
+                        <child>
+                          <object class="GtkCellRendererText"/>
+                          <attributes>
+                            <attribute name="text">0</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn">
+                        <property name="title" translatable="yes">Type</property>
+                        <property name="reorderable">True</property>
+                        <property name="sort_indicator">True</property>
+                        <property name="sort_column_id">1</property>
+                        <child>
+                          <object class="GtkCellRendererText"/>
+                          <attributes>
+                            <attribute name="text">1</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkTreeViewColumn">
+                        <property name="title" translatable="yes">Chapitre</property>
+                        <property name="reorderable">True</property>
+                        <property name="sort_indicator">True</property>
+                        <property name="sort_column_id">2</property>
+                        <child>
+                          <object class="GtkCellRendererText"/>
+                          <attributes>
+                            <attribute name="text">2</attribute>
+                          </attributes>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">2</property>
+                <property name="width">2</property>
               </packing>
             </child>
           </object>

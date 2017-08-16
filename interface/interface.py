@@ -20,6 +20,25 @@ data_étudiants = [["MPSI","Alp","Selin"],  # id, idClasse, nom, prénom
                       ["PSI","Grither","Noëmie"],
                       ["PSI","Berdery","Mathieu"],
                       ["PSI","Milhem","William"]]
+data_competenceType = ["Toutes","Connaissance","Technique","Raisonnement"]
+data_competenceChapitre = ["Tous","Généralités","Mécanique","Info_BDD"]
+data_competence = [["Connaître les unités standard","Connaissance","Généralités"],  # nom, type, chapitre
+                       ["Connaître les dimensions fondamentales","Connaissance","Généralités"],
+                       ["Connaître les dimensions dérivées","Connaissance","Généralités"],
+                       ["Vérifier l'homogénéité","Technique","Généralités"],
+                       ["Prévoir un résultat par AD","Technique","Généralités"],
+                       ["Propoager une incertitude","Technique","Généralités"],
+                       ["Connaître le principe d'inertie","Connaissance","Mécanique"],
+                       ["Connaître la poussée d'Archimède","Connaissance","Mécanique"],
+                       ["Définir le travail d'une force","Connaissance","Mécanique"],
+                       ["Calculer le travail d'une force","Technique","Mécanique"],
+                       ["Exprimer l'accélération dans une base cylindrique","Technique","Mécanique"],
+                       ["Calculer un moment scalaire par bras de levier","Technique","Mécanique"],
+                       ["Interpréter une accélération centripète","Raisonnement","Mécanique"],
+                       ["Interpréter la conservation de l'énergie","Raisonnement","Mécanique"],
+                       ["Effectuer un bilan des forces","Raisonnement","Mécanique"],
+                       ["Effectuer une requête simple","Technique","Info_BDD"],
+                       ["Effectuer une jointure","Technique","Info_BDD"]]
 
 ## imports
 import gi
@@ -65,7 +84,7 @@ class FenêtrePrincipale(object):
     # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
         """
-        Fonction qui charge les classes dans les ListStore adaptés.
+        Fonction qui charge les compétences dans les ListStore adaptés.
         Implémentation temporaire.
         """
         # Peuplement à la main ; à modifier
@@ -188,6 +207,39 @@ class FenêtrePrincipale(object):
             return(False)
         return(True)
 
+    # Fonctions liées à la gestion des compétences
+    def chargerCompétences(self):
+        """
+        Fonction qui charge les classes dans les ListStore adaptés.
+        Implémentation temporaire.
+        """
+        # Peuplement à la main ; à modifier
+        for ty in data_competenceType:
+            self.modèleCompétenceType.append([ty])
+        self.builder.get_object("sélecteurCompétenceType").set_active(0)
+        for ch in data_competenceChapitre:
+            self.modèleCompétenceChapitre.append([ch])
+        self.builder.get_object("sélecteurCompétenceChapitre").set_active(0)
+        for cp in data_competence:
+            self.modèleCompétence.append(cp)
+
+    def changerFiltresCompétences(self,sélecteur:Gtk.ComboBox):
+        """
+        Callback pour les sélecteurs de type / chapitre de compétences.
+        """
+        self.builder.get_object("modèleCompétenceFiltré").refilter()
+
+    def filtreVisibilitéCompétences(self,model,it,data):
+        """
+        Fonction pour rendre visible uniquement les compétences d'un chapitre / une catégorie.
+        """
+        typeActif = self.modèleCompétenceType[self.builder.get_object("sélecteurCompétenceType").get_active()][0]
+        chapitreActif = \
+          self.modèleCompétenceChapitre[self.builder.get_object("sélecteurCompétenceChapitre").get_active()][0]
+        return( (typeActif == "Toutes" or typeActif == model[it][1]) and \
+          (chapitreActif == "Tous" or chapitreActif == model[it][2]))
+
+    # Constructeur
     def __init__(self):
         """
         Constructeur
@@ -203,12 +255,17 @@ class FenêtrePrincipale(object):
         self.classeActive = "Toutes"
         self.modèleClasses = self.builder.get_object("modèleClasses")
         self.modèleÉtudiants = self.builder.get_object("modèleÉtudiants")
+        self.modèleCompétenceType = self.builder.get_object("modèleCompétenceType")
+        self.modèleCompétenceChapitre = self.builder.get_object("modèleCompétenceChapitre")
+        self.modèleCompétence = self.builder.get_object("modèleCompétence")
         # Mise en place de la vue des étudiants
         self.builder.get_object("modèleÉtudiantsFiltré").set_visible_func(self.filtreVisibilitéParClasse)
         # Mise en place des exclusions de listes
         self.builder.get_object("modèleClassesModifiables").set_visible_func(self.filtreModifiables)
+        self.builder.get_object("modèleCompétenceFiltré").set_visible_func(self.filtreVisibilitéCompétences)
         # Chargement des données
         self.chargerClasses()
+        self.chargerCompétences()
         # lancement
         self.fenêtrePrincipale.show()
 

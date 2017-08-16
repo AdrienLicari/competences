@@ -10,6 +10,21 @@
       <column type="gchararray"/>
     </columns>
   </object>
+  <object class="GtkTreeModelFilter" id="modèleClassesModifiables">
+    <property name="child_model">modèleClasses</property>
+  </object>
+  <object class="GtkListStore" id="modèleCompétence">
+    <columns>
+      <!-- column-name idCompétence -->
+      <column type="gint"/>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+      <!-- column-name idType -->
+      <column type="gint"/>
+      <!-- column-name idChapitre -->
+      <column type="gint"/>
+    </columns>
+  </object>
   <object class="GtkListStore" id="modèleÉtudiants">
     <columns>
       <!-- column-name idÉtudiant -->
@@ -22,11 +37,11 @@
       <column type="gchararray"/>
     </columns>
   </object>
-  <object class="GtkTreeModelFilter" id="modèleÉtudiantsFiltré">
-    <property name="child_model">modèleÉtudiants</property>
-  </object>
   <object class="GtkTreeModelSort" id="modèleÉtudiantsClassé">
-    <property name="model">modèleÉtudiantsFiltré</property>
+    <property name="model">modèleÉtudiants</property>
+  </object>
+  <object class="GtkTreeModelFilter" id="modèleÉtudiantsFiltré">
+    <property name="child_model">modèleÉtudiantsClassé</property>
   </object>
   <object class="GtkWindow" id="fenêtrePrincipale">
     <property name="can_focus">False</property>
@@ -238,6 +253,8 @@
           <object class="GtkGrid" id="grilleSecondaire">
             <property name="visible">True</property>
             <property name="can_focus">False</property>
+            <property name="hexpand">True</property>
+            <property name="vexpand">True</property>
             <child>
               <object class="GtkComboBox" id="sélecteurClasse">
                 <property name="visible">True</property>
@@ -270,7 +287,7 @@
                     <property name="visible">True</property>
                     <property name="can_focus">True</property>
                     <property name="vexpand">True</property>
-                    <property name="model">modèleÉtudiantsClassé</property>
+                    <property name="model">modèleÉtudiantsFiltré</property>
                     <property name="reorderable">True</property>
                     <property name="rules_hint">True</property>
                     <property name="enable_grid_lines">horizontal</property>
@@ -524,7 +541,7 @@
               <object class="GtkComboBox" id="sélectionneurClasseÀSupprimer">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="model">modèleClasses</property>
+                <property name="model">modèleClassesModifiables</property>
                 <child>
                   <object class="GtkCellRendererText" id="nomClasse"/>
                   <attributes>

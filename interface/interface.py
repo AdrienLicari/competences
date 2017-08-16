@@ -7,20 +7,22 @@ Module gérant l'interface graphique.
 
 ## Temporaire : données hardcodées pour la phase de mise en place / tests
 # La mise en place de ces schémas est la même que pour la BDD
-data_classes = [[1,'MPSI'],[2,'MP'],[3,'PSI']]  # id,nom
-data_étudiants = [[1,1,'Alp','Selin'],  # id, idClasse, nom, prénom
-                      [2,1,'Bazin','Jérémy'],
-                      [3,1,'Gourgues','Maxime'],
-                      [4,1,'Morceaux','Jérémy'],
-                      [5,1,'Dias','Léo'],
-                      [6,2,'Chevasson','Raphaël'],
-                      [7,2,'Clémenceau','Sandra'],
-                      [8,2,'Hubert','Olive'],
-                      [9,2,'Bornet','Clément'],
-                      [10,3,'Grither','Noëmie'],
-                      [11,3,'Berdery','Mathieu'],
-                      [12,3,'Milhem','William']
-        ]
+data_classes = [[0,"Toutes"],  # id,nom
+                    [1,"MPSI"],
+                    [2,"MP"],
+                    [3,"PSI"]]
+data_étudiants = [[1,1,"Alp","Selin"],  # id, idClasse, nom, prénom
+                      [2,1,"Bazin","Jérémy"],
+                      [3,1,"Gourgues","Maxime"],
+                      [4,1,"Morceaux","Jérémy"],
+                      [5,1,"Dias","Léo"],
+                      [6,2,"Chevasson","Raphaël"],
+                      [7,2,"Clémenceau","Sandra"],
+                      [8,2,"Hubert","Olive"],
+                      [9,2,"Bornet","Clément"],
+                      [10,3,"Grither","Noëmie"],
+                      [11,3,"Berdery","Mathieu"],
+                      [12,3,"Milhem","William"]]
 
 ## imports
 import gi
@@ -113,13 +115,25 @@ class FenêtrePrincipale(object):
         """
         Fonction pour rendre visible uniquement les étudiants de la classe active
         """
+        if self.modèleClasses[self.classeActive][1] in ["Toutes","Tous"]:
+            return(True)
         return(model[it][1] == self.classeActive)
+
+    def filtreModifiables(self,model,it,data):
+        """
+        Fonction pour rendre visible uniquement les entités modifiables ou supprimables. 
+        Est utilisé dans le cas de modèles contenant l'entrée "Tous" pour l'exclure.
+        """
+        if model[it][1] in ["Toutes","Tous"]:
+            return(False)
+        return(True)
 
     def __init__(self):
         """
         Constructeur
         """
         # Chargmenet du glade
+        # Chargement du glade
         self.gladefile = 'interface.glade'
         self.builder = Gtk.Builder()
         self.builder.add_from_file(self.gladefile)
@@ -133,6 +147,8 @@ class FenêtrePrincipale(object):
         # Mise en place de la vue des étudiants
         self.builder.get_object("modèleÉtudiantsFiltré").set_visible_func(self.filtreVisibilitéParClasse)
         self.builder.get_object("modèleÉtudiantsClassé").set_sort_column_id(2,Gtk.SortType.ASCENDING)
+        # Mise en place des exclusions de listes
+        self.builder.get_object("modèleClassesModifiables").set_visible_func(self.filtreModifiables)
         # Chargement des données
         self.chargerClasses()
         # lancement

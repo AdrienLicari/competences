@@ -9,41 +9,41 @@ Module gérant l'interface graphique.
 # La mise en place de ces schémas est la même que pour la BDD
 data_classes = ["Toutes","MPSI","MP","PSI"]
 data_étudiants = [["MPSI","Alp","Selin"],  # id, idClasse, nom, prénom
-                      ["MPSI","Bazin","Jérémy"],
-                      ["MPSI","Morceaux","Jérémy"],
-                      ["MPSI","Dias","Léo"],
-                      ["MPSI","Gourgues","Maxime"],
-                      ["MP","Chevasson","Raphaël"],
-                      ["MP","Clémenceau","Sandra"],
-                      ["MP","Hubert","Olive"],
-                      ["MP","Bornet","Clément"],
-                      ["PSI","Grither","Noëmie"],
-                      ["PSI","Berdery","Mathieu"],
-                      ["PSI","Milhem","William"]]
+                  ["MPSI","Bazin","Jérémy"],
+                  ["MPSI","Morceaux","Jérémy"],
+                  ["MPSI","Dias","Léo"],
+                  ["MPSI","Gourgues","Maxime"],
+                  ["MP","Chevasson","Raphaël"],
+                  ["MP","Clémenceau","Sandra"],
+                  ["MP","Hubert","Olive"],
+                  ["MP","Bornet","Clément"],
+                  ["PSI","Grither","Noëmie"],
+                  ["PSI","Berdery","Mathieu"],
+                  ["PSI","Milhem","William"]]
 data_competenceType = ["Toutes","Connaissance","Technique","Raisonnement"]
 data_competenceChapitre = ["Tous","Généralités","Mécanique","Info_BDD"]
 data_competence = [["Connaître les unités standard","Connaissance","Généralités"],  # nom, type, chapitre
                        ["Connaître les dimensions fondamentales","Connaissance","Généralités"],
-                       ["Connaître les dimensions dérivées","Connaissance","Généralités"],
-                       ["Vérifier l'homogénéité","Technique","Généralités"],
-                       ["Prévoir un résultat par AD","Technique","Généralités"],
-                       ["Propoager une incertitude","Technique","Généralités"],
-                       ["Connaître le principe d'inertie","Connaissance","Mécanique"],
-                       ["Connaître la poussée d'Archimède","Connaissance","Mécanique"],
-                       ["Définir le travail d'une force","Connaissance","Mécanique"],
-                       ["Calculer le travail d'une force","Technique","Mécanique"],
-                       ["Exprimer l'accélération dans une base cylindrique","Technique","Mécanique"],
-                       ["Calculer un moment scalaire par bras de levier","Technique","Mécanique"],
-                       ["Interpréter une accélération centripète","Raisonnement","Mécanique"],
-                       ["Interpréter la conservation de l'énergie","Raisonnement","Mécanique"],
-                       ["Effectuer un bilan des forces","Raisonnement","Mécanique"],
-                       ["Effectuer une requête simple","Technique","Info_BDD"],
-                       ["Effectuer une jointure","Technique","Info_BDD"]]
+                   ["Connaître les dimensions dérivées","Connaissance","Généralités"],
+                   ["Vérifier l'homogénéité","Technique","Généralités"],
+                   ["Prévoir un résultat par AD","Technique","Généralités"],
+                   ["Propoager une incertitude","Technique","Généralités"],
+                   ["Connaître le principe d'inertie","Connaissance","Mécanique"],
+                   ["Connaître la poussée d'Archimède","Connaissance","Mécanique"],
+                   ["Définir le travail d'une force","Connaissance","Mécanique"],
+                   ["Calculer le travail d'une force","Technique","Mécanique"],
+                   ["Exprimer l'accélération dans une base cylindrique","Technique","Mécanique"],
+                   ["Calculer un moment scalaire par bras de levier","Technique","Mécanique"],
+                   ["Interpréter une accélération centripète","Raisonnement","Mécanique"],
+                   ["Interpréter la conservation de l'énergie","Raisonnement","Mécanique"],
+                   ["Effectuer un bilan des forces","Raisonnement","Mécanique"],
+                   ["Effectuer une requête simple","Technique","Info_BDD"],
+                   ["Effectuer une jointure","Technique","Info_BDD"]]
 data_devoirType = ["Tous","DS","DM","interro"]
 data_devoir = [["MPSI","DS",1,"20.09.2017"],
-                ["MPSI","DS",2,"14.10.2017"],
-                ["MPSI","interro",1,"15.09.2017"],
-                ["PSI","DS",1,"20.11.2017"]]
+               ["MPSI","DS",2,"14.10.2017"],
+               ["MPSI","interro",1,"15.09.2017"],
+               ["PSI","DS",1,"20.11.2017"]]
 
 ## imports
 import gi
@@ -95,8 +95,7 @@ class FenetreDemande(Gtk.Dialog):
         - si choix est la str "libre", alors une entrée clavier est demandée ;
         - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
           les entrées du ListStore, colonne int.
-        - si choix est une paire ("valeurFixe",val), alors rien n'est demandé et cette entrée du modèle est
-          imposée par val
+        - si choix est la str "date" alors un calendrier est inséré et une date est demandée
         """
         Gtk.Dialog.__init__(self, " ", parent, 0,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -115,9 +114,10 @@ class FenetreDemande(Gtk.Dialog):
                 saisie.set_hexpand(True)
                 saisie.set_activates_default(True)
                 self.grille.attach(saisie,1,ligne,1,1)
-            elif type(dem) == tuple and dem[0] == "valeurFixe":
-                self.grille.remove_row(ligne+1)
-                ligne -= 1
+            elif type(dem) == str and dem == "date":
+                cal = Gtk.Calendar()
+                cal.set_hexpand(True)
+                self.grille.attach(cal,1,ligne,1,1)
             elif type(dem) == tuple:
                 comboBox = Gtk.ComboBox.new_with_model(dem[0])
                 comboBox.set_hexpand(True)
@@ -145,8 +145,10 @@ class FenetreDemande(Gtk.Dialog):
         for txt,dem in self.demandes:
             if type(dem) == str and dem == "libre":
                 retours.append(self.grille.get_child_at(1,i).get_text())
-            elif type(dem) == tuple and dem[0] == "valeurFixe":
-                retours.append(dem[1])
+            elif type(dem) == str and dem == "date":
+                date = self.grille.get_child_at(1,i).get_date()
+                date_str = "{:02d}.{:02d}.{:4d}".format(date[2],date[1],date[0])
+                retours.append(date_str)
                 i -= 1
             elif type(dem) == tuple:
                 comboBox = self.grille.get_child_at(1,i)
@@ -240,28 +242,33 @@ class FenêtrePrincipale(object):
         """
         Fonction générique utilisée pour la création d'un nouvel objet.
 
-        La liste demandes contient des paires (label, choix). Les possibilités sont les suivantes :
-        - si choix est la str "libre", alors une entrée clavier est demandée ;
-        - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
-          les entrées du ListStore, colonne int.
-        - si choix est une paire ("valeurFixe",val), alors rien n'est demandé et cette entrée du modèle est
-          imposée par val
+        La liste demandes contient des paires (label, choix). Les possibilités sont documentées dans la
+        docstring de FenetreDemande.__init__
 
         modèle est le modèle auquel on ajoutera l'élément créé ; les champs demandés doivent donc être
         dans l'ordre du modèle sous-jacent.
+
+        Si modèle contient des int, la conversion peut lever une ValueError. Elle doit être gérée par l'appelant.
         """
         # Préparation de la fenêtre
         dialogue = FenetreDemande(self.fenêtrePrincipale, label, demandes)
         réponse = dialogue.run()
+        liste = dialogue.récupèreInfos()
+        dialogue.destroy()
         if réponse == Gtk.ResponseType.OK:
-            liste = dialogue.récupèreInfos()
+            for i in range(len(liste)):
+                if type(modèle[0][i]) == int:
+                    try:
+                        liste[i] = int(liste[i])
+                    except(ValueError):
+                        FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
+                                                            "Un champ de type entier a été mal entré.")
             if "" in liste:
                 FenêtresInformation.affichageErreur(dialogue,"Vous devez remplir tous les champs")
             elif liste in [a[:] for a in modèle]:
                 FenêtresInformation.affichageErreur(dialogue,"Cet élément existe déjà")
             else:
                 modèle.append(liste)
-        dialogue.destroy()
 
     def changerSélecteurs(self,dummy):
         """
@@ -370,8 +377,7 @@ class FenêtrePrincipale(object):
         filtreT = self.modèleDevoirType.filter_new()
         filtreC.set_visible_func(self.filtreModifiables)
         filtreT.set_visible_func(self.filtreModifiables)
-        num = 10
-        demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("",("valeurFixe",num)), ("Date","libre")]
+        demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre"), ("Date","date")]
         self.créationNouvelObjet("Créez un nouveau devoir", demandes, self.modèleDevoir)
 
     def supprimerDevoir(self,dummy):

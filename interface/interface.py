@@ -59,7 +59,7 @@ class FenêtrePrincipale(object):
         """
         Gtk.main_quit(*args)
 
-    def affichageErreur(self,texte):
+    def affichageErreur(self,texte:str) -> None:
         """
         Une fonction utilisée pour afficher les messages d'erreur.
         """
@@ -69,7 +69,7 @@ class FenêtrePrincipale(object):
         dialogueErreur.run()
         dialogueErreur.destroy()
 
-    def demandeConfirmation(self,texte):
+    def demandeConfirmation(self,texte:str) -> None:
         """
         Une fonction utilisée pour demander une confirmation.
         Renvoie True ou False.
@@ -80,6 +80,84 @@ class FenêtrePrincipale(object):
         réponse = (dialogueConf.run() == Gtk.ResponseType.OK)
         dialogueConf.destroy()
         return(réponse)
+
+    def demandeSimpleTexte(self,texte:str) -> (Gtk.ResponseType,str):
+        """
+        Une fonction utilisée pour les demandes simples nécessitant une réponse tapée.
+        Renvoie la réponse (Ok ou Cancel) et le texte entré par l'tilisateur.
+        """
+        # Lancement de la boite de dialogue
+        dialogue = self.builder.get_object("dialogueSimpleTexte")
+        self.builder.get_object("dialogueSimpleTexteLabel").set_text(texte)
+        nomEntrée = self.builder.get_object("dialogueSimpleTexteSaisie")
+        nomEntrée.set_text("")
+        # Utilisation de Entrée pour valider
+        nomEntrée.set_activates_default(True)
+        boutonOk = dialogue.get_widget_for_response(response_id=Gtk.ResponseType.OK)
+        boutonOk.set_can_default(True)
+        boutonOk.grab_default()
+        # Lancement de la boite de dialogue
+        dialogue.show()
+        réponse = dialogue.run()
+        dialogue.hide()
+        return(réponse,nomEntrée.get_text())
+
+    def créationNouvelObjetSimple(self, texte:str, modèle:Gtk.ListStore, msgErreur:str) -> None:
+        """
+        Fonction générique utilisée pour la création d'un nouvel objet simple (classe, type de compétence...).
+        """
+        réponse,nom = self.demandeSimpleTexte(texte)
+        if réponse == Gtk.ResponseType.OK:
+            if nom in [ a[0] for a in modèle ]:
+                self.affichageErreur(msgErreur)
+            else:
+                modèle.append([nom])
+
+    def filtreModifiables(self,model,it,data) -> bool:
+        """
+        Fonction pour rendre visible uniquement les entités modifiables ou supprimables.
+        Est utilisé dans le cas de modèles contenant l'entrée "Tous" pour l'exclure.
+        """
+        if model[it][0] in ["Toutes","Tous"]:
+            return(False)
+        return(True)
+
+    def suppressionÉlémentsAssociésÀCatégorie(self, strCat:str, modèleÉléments:Gtk.ListStore, ind:int) -> None:
+        """
+        Fonction générique utilisée pour supprimer tous les éléments associés à une catégorie (par exemple
+        tous les étudiants associés à une classe). Le paramètre ind permet de préciser quel champ du modèle
+        correspond à la catégorie.
+        """
+        it = modèleÉléments.get_iter_first()
+        while it is not None and modèleÉléments.iter_is_valid(it):
+            if modèleÉléments[it][ind] == strCat:
+                modèleÉléments.remove(it)
+            else:
+                it = modèleÉléments.iter_next(it)
+
+    def suppressionObjetSimple(self, texte:str, modèle:Gtk.ListStore, texteConfirmation:str) -> str:
+        """
+        Fonction générique utilisée pour la suppression d'un objet simple (classe, type de compétence...).
+        Le texte de confirmation est pensé pour contenir le nom de l'élément sélectionné, il doit donc contenir
+        {} pour pouvoir appeler str.format.
+        Renvoie le nom de l'objet supprimé, ou None si l'opération est annulée.
+        """
+        dialogue = self.builder.get_object("dialogueSimpleSélection")
+        self.builder.get_object("dialogueSimpleSélectionLabel").set_text(texte)
+        filtre = modèle.filter_new()
+        filtre.set_visible_func(self.filtreModifiables)
+        self.builder.get_object("dialogueSimpleSélectionSélectionneur").set_model(filtre)
+        dialogue.show()
+        réponse = dialogue.run()
+        dialogue.hide()
+        if réponse == Gtk.ResponseType.OK:
+            it = self.builder.get_object("dialogueSimpleSélectionSélectionneur").get_active_iter()
+            it = filtre.convert_iter_to_child_iter(it)
+            nom = modèle[it][0]
+            if self.demandeConfirmation(texteConfirmation.format(nom)):
+                modèle.remove(it)
+                return(nom)
+        return(None)
 
     # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
@@ -98,47 +176,20 @@ class FenêtrePrincipale(object):
         """
         Callback utilisé pour la création d'une nouvelle classe.
         """
-        # Lancement de la boite de dialogue
-        dialogue = self.builder.get_object("dialogueCréationClasse")
-        nomClasseEntrée = self.builder.get_object("saisieNouvelleClasse")
-        # Utilisation de Entrée pour valider
-        nomClasseEntrée.set_activates_default(True)
-        boutonOk = dialogue.get_widget_for_response(response_id=Gtk.ResponseType.OK)
-        boutonOk.set_can_default(True)
-        boutonOk.grab_default()
-        # Lancement de la boite de dialogue
-        dialogue.show()
-        réponse = dialogue.run()
-        nomClasse = nomClasseEntrée.get_text()
-        if réponse == Gtk.ResponseType.OK:
-            if nomClasse in [ a[0] for a in self.modèleClasses ]:
-                self.affichageErreur("Le nom de classe que vous avez entré est déjà pris.")
-            else:
-                self.modèleClasses.append([nomClasse])
-        dialogue.hide()
+        self.créationNouvelObjetSimple("Entrez le nom de la nouvelle classe",\
+                                       self.modèleClasses,\
+                                       "Le nom de classe que vous avez entré est déjà pris.")
 
     def supprimerClasse(self,dummy):
         """
         Callback utilisé pour la suppression d'une classe.
         """
-        # Lancement de la boite de dialogue
-        dialogue = self.builder.get_object("dialogueSuppressionClasse")
-        dialogue.show()
-        réponse = dialogue.run()
-        if réponse == Gtk.ResponseType.OK:
-            iterClasse = self.builder.get_object("sélectionneurClasseÀSupprimer").get_active_iter()
-            nomClasse = self.builder.get_object("modèleClassesModifiables")[iterClasse][0]
-            if self.demandeConfirmation("Êtes-vous sûr de vouloir supprimer la classe {} " \
-                                         "ainsi que tous les étudiants qui la composent ?".format(nomClasse)):
-                it = self.builder.get_object("modèleClassesModifiables").convert_iter_to_child_iter(iterClasse)
-                self.modèleClasses.remove(it)
-                it = self.modèleÉtudiants.get_iter_first()
-                while it is not None and self.modèleÉtudiants.iter_is_valid(it):
-                    if self.modèleÉtudiants[it][0] == nomClasse:
-                        self.modèleÉtudiants.remove(it)
-                    else:
-                        it = self.modèleÉtudiants.iter_next(it)
-        dialogue.hide()
+        classeSupprimée =  self.suppressionObjetSimple("Sélectionnez la classe à supprimer", \
+                                            self.modèleClasses, \
+                                            "Êtes-vous sûr de vouloir supprimer la classe {} " \
+                                            "ainsi que tous les étudiants qui la composent ?")
+        if classeSupprimée is not None:
+            self.suppressionÉlémentsAssociésÀCatégorie(classeSupprimée, self.modèleÉtudiants, 0)
 
     def ajouterÉtudiant(self,dummy):
         """
@@ -198,15 +249,6 @@ class FenêtrePrincipale(object):
             return(True)
         return(model[it][0] == self.classeActive)
 
-    def filtreModifiables(self,model,it,data):
-        """
-        Fonction pour rendre visible uniquement les entités modifiables ou supprimables.
-        Est utilisé dans le cas de modèles contenant l'entrée "Tous" pour l'exclure.
-        """
-        if model[it][0] in ["Toutes","Tous"]:
-            return(False)
-        return(True)
-
     # Fonctions liées à la gestion des compétences
     def chargerCompétences(self):
         """
@@ -222,6 +264,44 @@ class FenêtrePrincipale(object):
         self.builder.get_object("sélecteurCompétenceChapitre").set_active(0)
         for cp in data_competence:
             self.modèleCompétence.append(cp)
+
+    def créerNouveauTypeCompétence(self,dummy):
+        """
+        Callback utilisé pour la création d'un nouveau type de compétence
+        """
+        self.créationNouvelObjetSimple("Entrez le nom du nouveau type de compétence.",\
+                                       self.modèleCompétenceType,\
+                                       "Le nom de type de compétence que vous avez entré est déjà pris.")
+
+    def supprimerTypeCompétence(self,dummy):
+        """
+        Callback utilisé pour la suppression d'un type de compétence
+        """
+        typeSupprimé = self.suppressionObjetSimple("Entrez le nom du type de compétence à supprimer.",\
+                                                       self.modèleCompétenceType,\
+                                                       "Êtes-vous sûr de vouloir supprimer la catégorie {} " \
+                                                       "ainsi que toutes les compétences associées ?")
+        if typeSupprimé is not None:
+            self.suppressionÉlémentsAssociésÀCatégorie(typeSupprimé, self.modèleCompétence, 1)
+
+    def créerNouveauChapitre(self,dummy):
+        """
+        Callback utilisé pour la création d'un nouveau type de compétence
+        """
+        self.créationNouvelObjetSimple("Entrez le nom du nouveau chapitre.",\
+                                       self.modèleCompétenceChapitre,\
+                                       "Le nom de chapitre que vous avez entré est déjà pris.")
+
+    def supprimerChapitre(self,dummy):
+        """
+        Callback utilisé pour la suppression d'un chapitre
+        """
+        chapSupprimé = self.suppressionObjetSimple("Entrez le nom du chapitre à supprimer.",\
+                                                       self.modèleCompétenceChapitre,\
+                                                       "Êtes-vous sûr de vouloir supprimer le chapitre {} " \
+                                                       "ainsi que toutes les compétences associées ?")
+        if chapSupprimé is not None:
+            self.suppressionÉlémentsAssociésÀCatégorie(chapSupprimé, self.modèleCompétence, 2)
 
     def changerFiltresCompétences(self,sélecteur:Gtk.ComboBox):
         """
@@ -268,6 +348,7 @@ class FenêtrePrincipale(object):
         self.chargerCompétences()
         # lancement
         self.fenêtrePrincipale.show()
+
 
 ## Tests
 if __name__ == '__main__':

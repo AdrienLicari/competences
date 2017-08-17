@@ -39,6 +39,11 @@ data_competence = [["Connaître les unités standard","Connaissance","Générali
                        ["Effectuer un bilan des forces","Raisonnement","Mécanique"],
                        ["Effectuer une requête simple","Technique","Info_BDD"],
                        ["Effectuer une jointure","Technique","Info_BDD"]]
+data_devoirType = ["Tous","DS","DM","interro"]
+data_devoir = [["MPSI","DS",1,"20.09.2017"],
+                ["MPSI","DS",2,"14.10.2017"],
+                ["MPSI","interro",1,"15.09.2017"],
+                ["PSI","DS",1,"20.11.2017"]]
 
 ## imports
 import gi
@@ -50,7 +55,7 @@ class FenêtresInformation(object):
     """
     Classe regroupant des créations de fenêtres sans intéraction avec l'utilisateur
     """
-    def affichageErreur(parent,texte:str) -> None:
+    def affichageErreur(parent, texte:str) -> None:
         """
         Une fonction utilisée pour afficher les messages d'erreur.
         """
@@ -60,7 +65,7 @@ class FenêtresInformation(object):
         dialogueErreur.run()
         dialogueErreur.destroy()
 
-    def demandeConfirmation(parent,texte:str) -> None:
+    def demandeConfirmation(parent, texte:str) -> None:
         """
         Une fonction utilisée pour demander une confirmation.
         Renvoie True ou False.
@@ -85,9 +90,13 @@ class FenetreDemande(Gtk.Dialog):
         Constructeur.
 
         Permet de créer la fenêtre qui aura les demandes fournies.
-        La liste demandes contient des paires (label, choix). Si choix est la str "libre", alors une entrée
-        clavier est demandée ; si choix est une paire (ListStore,int), alors on demande à l'utilisateur de
-        choisir parmi les entrées du ListStore, colonne int.
+
+        La liste demandes contient des paires (label, choix). Les possibilités sont les suivantes :
+        - si choix est la str "libre", alors une entrée clavier est demandée ;
+        - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
+          les entrées du ListStore, colonne int.
+        - si choix est une paire ("valeurFixe",val), alors rien n'est demandé et cette entrée du modèle est
+          imposée par val
         """
         Gtk.Dialog.__init__(self, " ", parent, 0,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -106,6 +115,9 @@ class FenetreDemande(Gtk.Dialog):
                 saisie.set_hexpand(True)
                 saisie.set_activates_default(True)
                 self.grille.attach(saisie,1,ligne,1,1)
+            elif type(dem) == tuple and dem[0] == "valeurFixe":
+                self.grille.remove_row(ligne+1)
+                ligne -= 1
             elif type(dem) == tuple:
                 comboBox = Gtk.ComboBox.new_with_model(dem[0])
                 comboBox.set_hexpand(True)
@@ -129,12 +141,17 @@ class FenetreDemande(Gtk.Dialog):
         Fonction appelée pour récupérer les infos dans les champs de la fenêtre.
         """
         retours = []
-        for i,(txt,dem) in enumerate(self.demandes):
+        i = 0
+        for txt,dem in self.demandes:
             if type(dem) == str and dem == "libre":
                 retours.append(self.grille.get_child_at(1,i).get_text())
+            elif type(dem) == tuple and dem[0] == "valeurFixe":
+                retours.append(dem[1])
+                i -= 1
             elif type(dem) == tuple:
                 comboBox = self.grille.get_child_at(1,i)
                 retours.append(dem[0][comboBox.get_active()][dem[1]])
+            i += 1
         return(retours)
 
 
@@ -223,9 +240,12 @@ class FenêtrePrincipale(object):
         """
         Fonction générique utilisée pour la création d'un nouvel objet.
 
-        La liste demandes contient des paires (label, choix). Si choix est la str "libre", alors une entrée
-        clavier est demandée ; si choix est une paire (ListStore,int), alors on demande à l'utilisateur de
-        choisir parmi les entrées du ListStore, colonne int.
+        La liste demandes contient des paires (label, choix). Les possibilités sont les suivantes :
+        - si choix est la str "libre", alors une entrée clavier est demandée ;
+        - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
+          les entrées du ListStore, colonne int.
+        - si choix est une paire ("valeurFixe",val), alors rien n'est demandé et cette entrée du modèle est
+          imposée par val
 
         modèle est le modèle auquel on ajoutera l'élément créé ; les champs demandés doivent donc être
         dans l'ordre du modèle sous-jacent.
@@ -243,10 +263,19 @@ class FenêtrePrincipale(object):
                 modèle.append(liste)
         dialogue.destroy()
 
+    def changerSélecteurs(self,dummy):
+        """
+        Callback pour les sélecteurs qui filtrent les listes actives.
+        """
+        self.classeActive = self.modèleClasses[self.builder.get_object("sélecteurClasse").get_active()][0]
+        self.builder.get_object("modèleÉtudiantsFiltré").refilter()
+        self.builder.get_object("modèleDevoirFiltré").refilter()
+        self.builder.get_object("modèleCompétenceFiltré").refilter()
+
     # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
         """
-        Fonction qui charge les compétences dans les ListStore adaptés.
+        Fonction qui charge les classes / étudiants dans les ListStore adaptés.
         Implémentation temporaire.
         """
         # Peuplement à la main ; à modifier
@@ -277,7 +306,7 @@ class FenêtrePrincipale(object):
 
     def ajouterÉtudiant(self,dummy):
         """
-        Callback utilisé pour la suppression d'un étudiant.
+        Callback utilisé pour la création d'un étudiant.
         """
         filtre = self.modèleClasses.filter_new()
         filtre.set_visible_func(self.filtreModifiables)
@@ -293,14 +322,6 @@ class FenêtrePrincipale(object):
         self.suppressionDepuisAfficheurListe("afficheurÉtudiants", constructionMsg, \
                                              "Vous n'avez pas sélectionné d'étudiant")
 
-    def changerClasseActive(self,sélecteur:Gtk.ComboBox):
-        """
-        Callback pour le changement de classe active.
-        """
-        nomClasse = self.modèleClasses[sélecteur.get_active()][0]
-        self.classeActive = nomClasse
-        self.builder.get_object("modèleÉtudiantsFiltré").refilter()
-
     def filtreVisibilitéParClasse(self,model,it,data):
         """
         Fonction pour rendre visible uniquement les étudiants de la classe active
@@ -308,6 +329,66 @@ class FenêtrePrincipale(object):
         if self.classeActive in ["Toutes","Tous"]:
             return(True)
         return(model[it][0] == self.classeActive)
+
+    # Fonctions liées à la gestion des devoirs
+    def chargerDevoirs(self):
+        """
+        Fonction qui charge les devoirs dans les ListStore adaptés.
+        Implémentation temporaire.
+        """
+        # Peuplement à la main ; à modifier
+        for dt in data_devoirType:
+            self.modèleDevoirType.append([dt])
+        self.builder.get_object("sélecteurDevoirType").set_active(0)
+        for dv in data_devoir:
+            self.modèleDevoir.append(dv)
+
+    def créerNouveauDevoirType(self,dummy):
+        """
+        Callback pour créer un nouveau type de devoir.
+        """
+        self.créationNouvelObjet("Créez un nouveau type de devoir", \
+                                 [("Nom","libre")], \
+                                 self.modèleDevoirType)
+
+    def supprimerDevoirType(self,dummy):
+        """
+        Callback pour supprimer un type de devoir.
+        """
+        typeSupprimé =  self.suppressionObjetSimple("Sélectionnez le type de devoir à supprimer", \
+                                                    self.modèleDevoirType, \
+                                                    "Êtes-vous sûr de vouloir supprimer la catégorie {} " \
+                                                    "ainsi que tous les devoirs associés ?")
+        if typeSupprimé is not None:
+            self.suppressionÉlémentsAssociésÀCatégorie(typeSupprimé, self.modèleDevoir, 1)
+
+    def créerDevoir(self,dummy):
+        """
+        Callback pour créer un nouveau devoir.
+        """
+        filtreC = self.modèleClasses.filter_new()
+        filtreT = self.modèleDevoirType.filter_new()
+        filtreC.set_visible_func(self.filtreModifiables)
+        filtreT.set_visible_func(self.filtreModifiables)
+        num = 10
+        demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("",("valeurFixe",num)), ("Date","libre")]
+        self.créationNouvelObjet("Créez un nouveau devoir", demandes, self.modèleDevoir)
+
+    def supprimerDevoir(self,dummy):
+        """
+        Callback utilisé pour la suppression d'un devoir.
+        """
+        constructionMsg = lambda a: "Voulez-vous supprimer le devoir {} {} des {} ?".format(a[1],a[2],a[0])
+        self.suppressionDepuisAfficheurListe("afficheurDevoirs", constructionMsg, \
+                                             "Vous n'avez pas sélectionné de devoir")
+
+    def filtreVisibilitéDevoirs(self,model,it,data):
+        """
+        Fonction pour rendre visible uniquement les devoirs d'un type / d'une classe
+        """
+        typeActif = self.modèleDevoirType[self.builder.get_object("sélecteurDevoirType").get_active()][0]
+        return( (typeActif == "Tous" or typeActif == model[it][1]) and \
+          (self.classeActive == "Toutes" or self.classeActive == model[it][0]))
 
     # Fonctions liées à la gestion des compétences
     def chargerCompétences(self):
@@ -385,12 +466,6 @@ class FenêtrePrincipale(object):
         self.suppressionDepuisAfficheurListe("afficheurCompétences", msgFunc, \
                                              "Aucune compétence n'est sélectionnée.")
 
-    def changerFiltresCompétences(self,sélecteur:Gtk.ComboBox):
-        """
-        Callback pour les sélecteurs de type / chapitre de compétences.
-        """
-        self.builder.get_object("modèleCompétenceFiltré").refilter()
-
     def filtreVisibilitéCompétences(self,model,it,data):
         """
         Fonction pour rendre visible uniquement les compétences d'un chapitre / une catégorie.
@@ -420,13 +495,16 @@ class FenêtrePrincipale(object):
         self.modèleCompétenceType = self.builder.get_object("modèleCompétenceType")
         self.modèleCompétenceChapitre = self.builder.get_object("modèleCompétenceChapitre")
         self.modèleCompétence = self.builder.get_object("modèleCompétence")
-        # Mise en place de la vue des étudiants
+        self.modèleDevoirType = self.builder.get_object("modèleDevoirType")
+        self.modèleDevoir = self.builder.get_object("modèleDevoir")
+        # Mise en place des vues filtrées
         self.builder.get_object("modèleÉtudiantsFiltré").set_visible_func(self.filtreVisibilitéParClasse)
-        # Mise en place des exclusions de listes
+        self.builder.get_object("modèleDevoirFiltré").set_visible_func(self.filtreVisibilitéDevoirs)
         self.builder.get_object("modèleCompétenceFiltré").set_visible_func(self.filtreVisibilitéCompétences)
         # Chargement des données
         self.chargerClasses()
         self.chargerCompétences()
+        self.chargerDevoirs()
         # lancement
         self.fenêtrePrincipale.show()
 

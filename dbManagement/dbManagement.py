@@ -48,7 +48,7 @@ def créerSchéma(conn:s.Connection) -> None:
       "(id integer primary key autoincrement, classeId int, nom text, prenom text, " + \
       "foreign key(classeId) references classes(id));"
     str_tableDevoirs = "CREATE TABLE devoir " + \
-      "(id integer primary key autoincrement, typeId int, numero int, date text, classeId int, " + \
+      "(id integer primary key autoincrement, classeId int, typeId int, numero int, date text, " + \
       "foreign key(typeId) references devoirType(id), foreign key(classeId) references classes(id));"
     str_tableQuestions = "CREATE TABLE questions " + \
       "(id integer primary key autoincrement, devoirId int, nom text, coefficient int, " + \

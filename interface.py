@@ -49,6 +49,7 @@ data_devoir = [["MPSI","DS",1,"20.09.2017"],
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
+from traitements.traitements import *
 
 ## Classe regroupant des créations de fenêtres sans intéraction
 class FenêtresInformation(object):
@@ -157,6 +158,105 @@ class FenetreDemande(Gtk.Dialog):
         return(retours)
 
 
+## Classe pour la création des questions d'un devoir
+class FenetreQuestionsDevoir():
+    """
+    Classe gérant la construction d'une fenêtre popup pour la définition des questions /
+        compétences associées à un devoir.
+
+    Doit reçevoir un objet Devoir en paramètre.
+
+    Ne gère pas l'attachement de plus de 10 compétences à chaque question.
+    """
+    def __init__(self, devoir:Devoir, builder:Gtk.Builder):
+        """
+        Constructeur de la fenêtre.
+
+        Utilise le patron disponible dans le .glade, donné par le Gtk.Builder, puis modifie
+        les lignes en fonction des besoins du devoir considéré.
+        """
+        self.maxCompétenceParQuestion = 10
+        self.devoir_save = devoir
+        self.fenêtre = builder.get_object("fenêtreQuestionsDevoir")
+        self.treeview = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        titre_str = "Mise en place des questions du devoir {} {} de la classe {} - {}".format(devoir.typ,
+                                                                                              devoir.num,
+                                                                                              devoir.classe,
+                                                                                              devoir.date)
+        self.fenêtre.set_title(titre_str)
+        # Mise en place du modèle - doit être cohérent avec self.maxCompétenceParQuestion
+        self.modèle = Gtk.ListStore(str, \
+                                    str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int)
+        for q in devoir.questions:
+            self.ajouterLigne(q)
+        self.ajouterLigne()
+        # Mise en place de vue
+        self.vue = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        self.vue.set_model(self.modèle)
+        rdNuméro = Gtk.CellRendererText()
+        rdNuméro.set_property("editable",True)
+        rdNuméro.connect("edited", self.celluleÉditée, 0)
+        self.vue.append_column(Gtk.TreeViewColumn("N°",rdNuméro,text=0))
+        for i in range(self.maxCompétenceParQuestion):
+            col = Gtk.TreeViewColumn("Compétence {}".format(i+1))
+            rdComp, rdCoef = Gtk.CellRendererText(), Gtk.CellRendererText()
+            rdComp.set_property("editable",True)
+            rdCoef.set_property("editable",True)
+            rdComp.connect("edited", self.celluleÉditée, 2*i+1)
+            rdCoef.connect("edited", self.celluleÉditée, 2*i+2)
+            col.pack_start(rdComp,True)
+            col.pack_start(rdCoef,False)
+            col.add_attribute(rdComp, "text", 2*i+1)
+            col.add_attribute(rdCoef, "text", 2*i+2)
+            self.vue.append_column(col)
+        self.vue.append_column(Gtk.TreeViewColumn("",Gtk.CellRendererText()))
+        self.vue.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
+        self.gestionAffichage()
+        # Lancement
+        self.fenêtre.show_all()
+        réponse = self.fenêtre.run()
+        self.fenêtre.hide()
+
+    def ajouterLigne(self, question:tuple=None) -> None:
+        """
+        Fonction interne pour ajouter une ligne à la grille interne.
+
+        Si question est un tuple (nom_question,[(nom_compétence,coef)]), elle est ajoutée.
+        Si question est None, une ligne vide est ajoutée.
+        """
+        if question is None:
+            nom = ""
+            cp_coeff = ["",0]*self.maxCompétenceParQuestion
+        else:
+            nom = question[0]
+            cp_coeff = []
+            for a in question[1:]:
+                cp_coeff += [a[0],a[1]]
+            cp_coeff += ["",0]*(self.maxCompétenceParQuestion-len(question[1:]))
+        self.modèle.append([nom]+cp_coeff)
+
+    def celluleÉditée(self, cellule, path, text, num):
+        """
+        Callback pour la mise à jour du modèle quand une case est éditée.
+        """
+        if num%2 == 0 and num > 0:
+            text = int(text)
+        self.modèle[path][num] = text
+        if int(path) == len(self.modèle)-1:  # gestion de l'ajout de nouvelle ligne
+            self.ajouterLigne()
+        self.gestionAffichage()
+
+    def gestionAffichage(self):
+        """
+        Fonction ayant pour rôle de définir les colonnes visibles ou non.
+        """
+        listeCompétences = [ [k for k in a[1:] if type(k) == str and k != ""] for a in self.modèle ]
+        nbCols = max([ len(a) for a in listeCompétences ]) + 2
+        for i in range(1,nbCols):
+            self.vue.get_column(i).set_visible(True)
+        for i in range(nbCols,self.maxCompétenceParQuestion+1):
+            self.vue.get_column(i).set_visible(False)
+
 ## Classe de la fenêtre principale
 
 class FenêtrePrincipale(object):
@@ -218,6 +318,28 @@ class FenêtrePrincipale(object):
                 return(nom)
         return(None)
 
+    def sélectionDepuisAfficheurListe(self, afficheur:str, msgErr:str) -> tuple:
+        """
+        Fonction générique utilisée pour supprimer depuis une liste ordonnable et triable.
+
+        - L'afficheur est identifié par son identifiant glade
+        - msgErr est utilisée en cas d'absence de sélection de la part de l'utilisateur
+
+        Renvoie une paire contenant le modèle lié à l'affichage (en supposant qu'il y a deux étapes
+        entre le modèle et l'affichage : tri et filtre) et l'itérateur sélectionné ; s'il n'y a pas
+        de sélection, renvoie (None,None).
+        """
+        modèleSup, it = self.builder.get_object(afficheur).get_selection().get_selected()
+        if it is None:
+            FenêtresInformation.affichageErreur(self.fenêtrePrincipale,msgErr)
+            return((None,None))
+        else:
+            iterInterm = modèleSup.convert_iter_to_child_iter(it)
+            modèleInter = modèleSup.get_model()
+            iterFinal = modèleInter.convert_iter_to_child_iter(iterInterm)
+            modèleFinal = modèleInter.get_model()
+            return(modèleFinal, iterFinal)
+
     def suppressionDepuisAfficheurListe(self, afficheur:str, texteConfirmation:'function', msgErr:str) -> None:
         """
         Fonction générique utilisée pour supprimer depuis une liste ordonnable et triable.
@@ -227,28 +349,24 @@ class FenêtrePrincipale(object):
           de la ligne récupérée
         - msgErr est utilisée en cas d'absence de sélection de la part de l'utilisateur
         """
-        modèleSup, it = self.builder.get_object(afficheur).get_selection().get_selected()
-        if it is None:
-            FenêtresInformation.affichageErreur(self.fenêtrePrincipale,msgErr)
-        else:
-            msg = texteConfirmation(modèleSup[it])
+        modèle, it = self.sélectionDepuisAfficheurListe(afficheur, msgErr)
+        if it is not None:
+            msg = texteConfirmation(modèle[it])
             if FenêtresInformation.demandeConfirmation(self.fenêtrePrincipale,msg):
-                iterInterm = modèleSup.convert_iter_to_child_iter(it)
-                modèleInter = modèleSup.get_model()
-                iterFinal = modèleInter.convert_iter_to_child_iter(iterInterm)
-                modèleInter.get_model().remove(iterFinal)
+                modèle.remove(it)
 
-    def créationNouvelObjet(self, label:str, demandes:list, modèle:Gtk.ListStore) -> None:
+    def créationNouvelObjet(self, label:str, demandes:list, modèle:Gtk.ListStore) -> list:
         """
         Fonction générique utilisée pour la création d'un nouvel objet.
 
         La liste demandes contient des paires (label, choix). Les possibilités sont documentées dans la
         docstring de FenetreDemande.__init__
 
-        modèle est le modèle auquel on ajoutera l'élément créé ; les champs demandés doivent donc être
-        dans l'ordre du modèle sous-jacent.
+        Les champs demandés doivent l'être dans l'ordre du modèle sous-jacent. modèle est le modèle à peupler.
 
         Si modèle contient des int, la conversion peut lever une ValueError. Elle doit être gérée par l'appelant.
+
+        Renvoie la liste correspondant aux données ajoutées dans le modèle si l'ajout est réussi, None sinon.
         """
         # Préparation de la fenêtre
         dialogue = FenetreDemande(self.fenêtrePrincipale, label, demandes)
@@ -269,6 +387,8 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(dialogue,"Cet élément existe déjà")
             else:
                 modèle.append(liste)
+                return(liste)
+            return(None)
 
     def changerSélecteurs(self,dummy):
         """
@@ -349,6 +469,7 @@ class FenêtrePrincipale(object):
         self.builder.get_object("sélecteurDevoirType").set_active(0)
         for dv in data_devoir:
             self.modèleDevoir.append(dv)
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
 
     def créerNouveauDevoirType(self,dummy):
         """
@@ -378,7 +499,10 @@ class FenêtrePrincipale(object):
         filtreC.set_visible_func(self.filtreModifiables)
         filtreT.set_visible_func(self.filtreModifiables)
         demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre"), ("Date","date")]
-        self.créationNouvelObjet("Créez un nouveau devoir", demandes, self.modèleDevoir)
+        dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes, self.modèleDevoir)
+        if dv is not None:
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
+        print(self.devoirs)
 
     def supprimerDevoir(self,dummy):
         """
@@ -387,6 +511,17 @@ class FenêtrePrincipale(object):
         constructionMsg = lambda a: "Voulez-vous supprimer le devoir {} {} des {} ?".format(a[1],a[2],a[0])
         self.suppressionDepuisAfficheurListe("afficheurDevoirs", constructionMsg, \
                                              "Vous n'avez pas sélectionné de devoir")
+
+    def modifierQuestionsDevoir(self,dummy):
+        """
+        Callback utilisé pour la modification des questions dans un devoir.
+        Délègue à la classe FenetreQuestionsDevoir.
+        """
+        modèle,it = self.sélectionDepuisAfficheurListe("afficheurDevoirs", \
+                                                       "Vous n'avez pas sélectionné de devoir")
+        if it is not None:
+            dev = [d for d in self.devoirs if d.correspondÀ(modèle[it])][0]
+            fenêtreQuestions = FenetreQuestionsDevoir(dev, self.builder)
 
     def filtreVisibilitéDevoirs(self,model,it,data):
         """
@@ -496,6 +631,8 @@ class FenêtrePrincipale(object):
         self.fenêtrePrincipale = self.builder.get_object("fenêtrePrincipale")
         # Création des objets de l'état : les classes, les étudiants
         self.classeActive = "Toutes"
+        self.devoirs = []
+        # Création des modèles de données pour les affichages
         self.modèleClasses = self.builder.get_object("modèleClasses")
         self.modèleÉtudiants = self.builder.get_object("modèleÉtudiants")
         self.modèleCompétenceType = self.builder.get_object("modèleCompétenceType")

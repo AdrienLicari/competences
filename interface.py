@@ -217,19 +217,18 @@ class FenetreQuestionsDevoir():
         self.devoir_save = devoir
         self.fenêtre = builder.get_object("fenêtreQuestionsDevoir")
         self.treeview = builder.get_object("fenêtreQuestionsDevoirAfficheur")
-        titre_str = "Mise en place des questions du devoir {} {} de la classe {} - {}".format(devoir.typ,
-                                                                                              devoir.num,
-                                                                                              devoir.classe,
-                                                                                              devoir.date)
+        titre_str = "Mise en place des questions du devoir {} {} de la classe {} - {}".\
+                    format(devoir.typ,devoir.num,devoir.classe,devoir.date)
         self.fenêtre.set_title(titre_str)
+        builder.get_object("fenêtreQuestionsDevoirAppliquer").connect("clicked",self.sauvegarderCompétences)
         # Mise en place du modèle - doit être cohérent avec self.maxCompétenceParQuestion
         self.modèle = Gtk.ListStore(str, \
                                     str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int)
-        for q in devoir.questions:
-            self.ajouterLigne(q)
-        self.ajouterLigne()
+        self.màjModèle()
         # Mise en place de vue
         self.vue = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        while self.vue.get_n_columns() > 0:
+            self.vue.remove_column(self.vue.get_column(0))
         self.vue.set_model(self.modèle)
         rdNuméro = Gtk.CellRendererText()
         rdNuméro.set_property("editable",True)
@@ -269,16 +268,28 @@ class FenetreQuestionsDevoir():
         Si question est un tuple (nom_question,[(nom_compétence,coef)]), elle est ajoutée.
         Si question est None, une ligne vide est ajoutée.
         """
-        if question is None:
-            nom = ""
-            cp_coeff = ["",0]*self.maxCompétenceParQuestion
-        else:
+        if question is not None:
             nom = question[0]
             cp_coeff = []
-            for a in question[1:]:
+            for a in question[1:][0]:
                 cp_coeff += [a[0],a[1]]
-            cp_coeff += ["",0]*(self.maxCompétenceParQuestion-len(question[1:]))
+            cp_coeff += ["",0]*(self.maxCompétenceParQuestion-len(cp_coeff)//2)
+        else:
+            nom = ""
+            cp_coeff = ["",0]*self.maxCompétenceParQuestion
         self.modèle.append([nom]+cp_coeff)
+
+    def màjModèle(self) -> None:
+        """
+        Fonction interne pour ajouter une ligne à la grille interne.
+
+        Si question est un tuple (nom_question,[(nom_compétence,coef)]), elle est ajoutée.
+        Si question est None, une ligne vide est ajoutée.
+        """
+        self.modèle.clear()
+        for q in self.devoir_save.questions:
+            self.ajouterLigne(q)
+        self.ajouterLigne()
 
     def celluleÉditée(self, cellule, path, text, num):
         """
@@ -302,8 +313,20 @@ class FenetreQuestionsDevoir():
         for i in range(nbCols,self.maxCompétenceParQuestion+1):
             self.vue.get_column(i).set_visible(False)
 
-## Classe de la fenêtre principale
+    def sauvegarderCompétences(self,dummy):
+        """
+        Callback utilisé pour mettre à jour l'objet Devoir sous-jacent à partir du modèle.
+        """
+        self.devoir_save.questions.clear()
+        for q in self.modèle:
+            nom = q[0]
+            comps = [ (q[2*i+1],q[2*i+2]) for i in range(self.maxCompétenceParQuestion) if q[2*i+1] != ""]
+            self.devoir_save.questions.append((nom,comps))
+        self.devoir_save.questions.pop()
+        self.màjModèle()
 
+
+## Classe de la fenêtre principale
 class FenêtrePrincipale(object):
     """
     Classe gérant la fenêtre de l'application.

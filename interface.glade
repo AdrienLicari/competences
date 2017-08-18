@@ -872,7 +872,7 @@
             <property name="can_focus">False</property>
             <property name="layout_style">end</property>
             <child>
-              <object class="GtkButton" id="button1">
+              <object class="GtkButton" id="fenêtreQuestionsDevoirAnnuler">
                 <property name="label">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
@@ -886,7 +886,7 @@
               </packing>
             </child>
             <child>
-              <object class="GtkButton" id="button2">
+              <object class="GtkButton" id="fenêtreQuestionsDevoirAppliquer">
                 <property name="label">gtk-apply</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
@@ -900,7 +900,7 @@
               </packing>
             </child>
             <child>
-              <object class="GtkButton" id="button3">
+              <object class="GtkButton" id="fenêtreQuestionsDevoirValider">
                 <property name="label">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
@@ -952,8 +952,8 @@
       </object>
     </child>
     <action-widgets>
-      <action-widget response="-6">button1</action-widget>
-      <action-widget response="-5">button3</action-widget>
+      <action-widget response="-6">fenêtreQuestionsDevoirAnnuler</action-widget>
+      <action-widget response="-5">fenêtreQuestionsDevoirValider</action-widget>
     </action-widgets>
   </object>
 </interface>

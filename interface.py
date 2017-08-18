@@ -51,6 +51,44 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 from traitements.traitements import *
 
+
+## Fonction pour les autocomplétions
+def match_anywhere(completion, entrystr, iter, data):
+    """
+    Fonction permettant à une autocomplétion de se faire avec
+    un sous-ensemble quelconque de la chaîne.
+    Taken from https://stackoverflow.com/questions/2250477/entry-with-suggestions
+    """
+    idCol = completion.props.text_column
+    modelstr = completion.get_model()[iter][idCol]
+    entrystr = completion.get_entry().get_text()
+    return(entrystr in modelstr)
+
+
+## CellRendererText avec autocomplétion
+class CellRendererAutoComplete(Gtk.CellRendererText):
+    """
+    Text entry cell which accepts a Gtk.EntryCompletion object
+    Taken from https://stackoverflow.com/questions/13756787/gtk-entry-in-gtk-treeview-cellrenderer
+    """
+    __gtype_name__ = 'CellRendererAutoComplete'
+    def __init__(self, completion):
+        self.completion = completion
+        Gtk.CellRendererText.__init__(self)
+    def do_start_editing(
+               self, event, treeview, path, background_area, cell_area, flags):
+        if not self.get_property('editable'):
+            return
+        entry = Gtk.Entry()
+        entry.set_completion(self.completion)
+        entry.connect('editing-done', self.editing_done, path)
+        entry.show()
+        entry.grab_focus()
+        return entry
+    def editing_done(self, entry, path):
+        self.emit('edited', path, entry.get_text())
+
+
 ## Classe regroupant des créations de fenêtres sans intéraction
 class FenêtresInformation(object):
     """
@@ -199,7 +237,14 @@ class FenetreQuestionsDevoir():
         self.vue.append_column(Gtk.TreeViewColumn("N°",rdNuméro,text=0))
         for i in range(self.maxCompétenceParQuestion):
             col = Gtk.TreeViewColumn("Compétence {}".format(i+1))
-            rdComp, rdCoef = Gtk.CellRendererText(), Gtk.CellRendererText()
+            completion = Gtk.EntryCompletion()
+            rdComp = CellRendererAutoComplete(completion)
+            rdCoef = Gtk.CellRendererText()
+            completion.set_model(builder.get_object("modèleCompétence"))
+            completion.pack_start(rdComp, True)
+            completion.add_attribute(rdComp, "text", 0)
+            completion.props.text_column = 0
+            completion.set_match_func(match_anywhere, None)
             rdComp.set_property("editable",True)
             rdCoef.set_property("editable",True)
             rdComp.connect("edited", self.celluleÉditée, 2*i+1)

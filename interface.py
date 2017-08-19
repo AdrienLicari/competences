@@ -135,6 +135,7 @@ class FenetreDemande(Gtk.Dialog):
         - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
           les entrées du ListStore, colonne int.
         - si choix est la str "date" alors un calendrier est inséré et une date est demandée
+        - si choix est la str "fichier", alors un bouton donnant accès à un sélecteur de fichiers est inséré
         """
         Gtk.Dialog.__init__(self, " ", parent, 0,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -146,6 +147,7 @@ class FenetreDemande(Gtk.Dialog):
         box.add(self.grille)
         ligne = 0
         self.demandes = demandes
+        self.fichiers = []  # utilisé dans le cas de demandes de fichiers
         for txt,dem in demandes:
             self.grille.attach(Gtk.Label(txt),0,ligne,1,1)
             if type(dem) == str and dem == "libre":
@@ -157,6 +159,10 @@ class FenetreDemande(Gtk.Dialog):
                 cal = Gtk.Calendar()
                 cal.set_hexpand(True)
                 self.grille.attach(cal,1,ligne,1,1)
+            elif type(dem) == str and dem == "fichier":
+                bouton = Gtk.Button("Choisir fichier")
+                bouton.connect("clicked", self.sousFenêtreFichier)
+                self.grille.attach(bouton,1,ligne,1,1)
             elif type(dem) == tuple:
                 comboBox = Gtk.ComboBox.new_with_model(dem[0])
                 comboBox.set_hexpand(True)
@@ -189,11 +195,31 @@ class FenetreDemande(Gtk.Dialog):
                 date_str = "{:02d}.{:02d}.{:4d}".format(date[2],date[1],date[0])
                 retours.append(date_str)
                 i -= 1
+            elif type(dem) == str and dem == "fichier":
+                retours.append(self.fichiers[0])
+                self.fichiers.pop(0)
             elif type(dem) == tuple:
                 comboBox = self.grille.get_child_at(1,i)
                 retours.append(dem[0][comboBox.get_active()][dem[1]])
             i += 1
         return(retours)
+
+    def sousFenêtreFichier(self, bouton:Gtk.Button):
+        """
+        Callback utilisé pour lancer une fenêtre sélecteur de fichier.
+
+        Modifie le texte du bouton une fois le fichier sélectionné.
+        """
+        dialogue = Gtk.FileChooserDialog("Choisissez un fichier", self,
+            Gtk.FileChooserAction.OPEN,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+             Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
+        réponse = dialogue.run()
+        if réponse == Gtk.ResponseType.OK:
+            self.fichiers.append(dialogue.get_filename())
+        dialogue.destroy()
+        nomFichier = self.fichiers[-1].split("/")[-1]
+        bouton.set_label(nomFichier)
 
 
 ## Classe pour la création des questions d'un devoir
@@ -495,6 +521,29 @@ class FenêtrePrincipale(object):
         self.créationNouvelObjet("Entrez le nouvel étudiant",\
                                  [("Classe",(filtre,0)),("Nom","libre"),("Prénom","libre")], \
                                  self.modèleÉtudiants)
+
+    def ajouterÉtudiantsDepuisFichier(self,dummy):
+        """
+        Fonction pour ajouter une liste d'étudiants depuis un fichier
+        correctement formaté.
+        """
+        # Choix du fichier
+        filtre = self.modèleClasses.filter_new()
+        filtre.set_visible_func(self.filtreModifiables)
+        explication = "Sélectionnez un fichier contenant un étudiant par ligne, nom puis prénom, " \
+                      "séparés par un point-virgule."
+        dialogue = FenetreDemande(self.fenêtrePrincipale, "Ajouter une liste d'étudiants", \
+                                  [("Classe",(filtre,0)),(explication,"fichier")])
+        réponse = dialogue.run()
+        classe, nomFichier = dialogue.récupèreInfos()
+        dialogue.destroy()
+        # Lecture du fichier
+        séparateur = ";"
+        fichier = open(nomFichier,'r')
+        for ligne in fichier:
+            nom,prénom = ligne.split(séparateur)
+            self.modèleÉtudiants.append([classe,nom,prénom[:-1]])  # on exclut le '\n' de fin de ligne
+        fichier.close()
 
     def supprimerÉtudiant(self,dummy):
         """

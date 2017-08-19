@@ -749,6 +749,15 @@
                       <object class="GtkMenuItem">
                         <property name="visible">True</property>
                         <property name="can_focus">False</property>
+                        <property name="label">Ajouter une liste d'étudiants depuis un fichier</property>
+                        <property name="use_underline">True</property>
+                        <signal name="activate" handler="ajouterÉtudiantsDepuisFichier" swapped="no"/>
+                      </object>
+                    </child>
+                    <child>
+                      <object class="GtkMenuItem">
+                        <property name="visible">True</property>
+                        <property name="can_focus">False</property>
                         <property name="label">Supprimer étudiant</property>
                         <property name="use_underline">True</property>
                         <signal name="activate" handler="supprimerÉtudiant" swapped="no"/>

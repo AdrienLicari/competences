@@ -23,11 +23,11 @@ data_étudiants = [["MPSI","Alp","Selin"],  # id, idClasse, nom, prénom
 data_competenceType = ["Toutes","Connaissance","Technique","Raisonnement"]
 data_competenceChapitre = ["Tous","Généralités","Mécanique","Info_BDD"]
 data_competence = [["Connaître les unités standard","Connaissance","Généralités"],  # nom, type, chapitre
-                       ["Connaître les dimensions fondamentales","Connaissance","Généralités"],
+                   ["Connaître les dimensions fondamentales","Connaissance","Généralités"],
                    ["Connaître les dimensions dérivées","Connaissance","Généralités"],
                    ["Vérifier l'homogénéité","Technique","Généralités"],
                    ["Prévoir un résultat par AD","Technique","Généralités"],
-                   ["Propoager une incertitude","Technique","Généralités"],
+                   ["Propager une incertitude","Technique","Généralités"],
                    ["Connaître le principe d'inertie","Connaissance","Mécanique"],
                    ["Connaître la poussée d'Archimède","Connaissance","Mécanique"],
                    ["Définir le travail d'une force","Connaissance","Mécanique"],
@@ -60,8 +60,8 @@ def match_anywhere(completion, entrystr, iter, data):
     Taken from https://stackoverflow.com/questions/2250477/entry-with-suggestions
     """
     idCol = completion.props.text_column
-    modelstr = completion.get_model()[iter][idCol]
-    entrystr = completion.get_entry().get_text()
+    modelstr = completion.get_model()[iter][idCol].lower()
+    entrystr = completion.get_entry().get_text().lower()
     return(entrystr in modelstr)
 
 
@@ -225,6 +225,7 @@ class FenetreQuestionsDevoir():
         self.modèle = Gtk.ListStore(str, \
                                     str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int)
         self.màjModèle()
+        self.modèleCompétence = builder.get_object("modèleCompétence")
         # Mise en place de vue
         self.vue = builder.get_object("fenêtreQuestionsDevoirAfficheur")
         while self.vue.get_n_columns() > 0:
@@ -239,7 +240,7 @@ class FenetreQuestionsDevoir():
             completion = Gtk.EntryCompletion()
             rdComp = CellRendererAutoComplete(completion)
             rdCoef = Gtk.CellRendererText()
-            completion.set_model(builder.get_object("modèleCompétence"))
+            completion.set_model(self.modèleCompétence)
             completion.pack_start(rdComp, True)
             completion.add_attribute(rdComp, "text", 0)
             completion.props.text_column = 0
@@ -261,22 +262,12 @@ class FenetreQuestionsDevoir():
         réponse = self.fenêtre.run()
         self.fenêtre.hide()
 
-    def ajouterLigne(self, question:tuple=None) -> None:
+    def ajouterLigne(self) -> None:
         """
-        Fonction interne pour ajouter une ligne à la grille interne.
-
-        Si question est un tuple (nom_question,[(nom_compétence,coef)]), elle est ajoutée.
-        Si question est None, une ligne vide est ajoutée.
+        Fonction interne pour ajouter une ligne vide au modèle, servant à créer une nouvelle question.
         """
-        if question is not None:
-            nom = question[0]
-            cp_coeff = []
-            for a in question[1:][0]:
-                cp_coeff += [a[0],a[1]]
-            cp_coeff += ["",0]*(self.maxCompétenceParQuestion-len(cp_coeff)//2)
-        else:
-            nom = ""
-            cp_coeff = ["",0]*self.maxCompétenceParQuestion
+        nom = ""
+        cp_coeff = ["",0]*self.maxCompétenceParQuestion
         self.modèle.append([nom]+cp_coeff)
 
     def màjModèle(self) -> None:
@@ -287,8 +278,8 @@ class FenetreQuestionsDevoir():
         Si question est None, une ligne vide est ajoutée.
         """
         self.modèle.clear()
-        for q in self.devoir_save.questions:
-            self.ajouterLigne(q)
+        for q in self.devoir_save.get_listeQuestionsModèle(self.maxCompétenceParQuestion):
+            self.modèle.append(q)
         self.ajouterLigne()
 
     def celluleÉditée(self, cellule, path, text, num):
@@ -317,12 +308,9 @@ class FenetreQuestionsDevoir():
         """
         Callback utilisé pour mettre à jour l'objet Devoir sous-jacent à partir du modèle.
         """
-        self.devoir_save.questions.clear()
-        for q in self.modèle:
-            nom = q[0]
-            comps = [ (q[2*i+1],q[2*i+2]) for i in range(self.maxCompétenceParQuestion) if q[2*i+1] != ""]
-            self.devoir_save.questions.append((nom,comps))
-        self.devoir_save.questions.pop()
+        listeModèle = [ ligne[:] for ligne in self.modèle]
+        listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
+        self.devoir_save.set_questionsDepuisModèle(listeModèle, listeCompétences)
         self.màjModèle()
 
 
@@ -538,6 +526,7 @@ class FenêtrePrincipale(object):
         for dv in data_devoir:
             self.modèleDevoir.append(dv)
             self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
+        self.devoirs[0].test_créerQuestionsDevoir()
 
     def créerNouveauDevoirType(self,dummy):
         """

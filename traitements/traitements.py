@@ -65,3 +65,48 @@ class Devoir(object):
         """
         self.question[num] = (nom,compétences_coef)
         self.questions.sort(key=lambda x: x[0])
+
+    def get_listeQuestionsModèle(self, nombreCompétencesMax:int) -> list:
+        """
+        Fonction renvoyant une liste de questions sous la forme adaptée à un Gtk.ListStore.
+
+        Chaque élément de la liste est une liste contenant :
+        - le nom de la question
+        - le nom de la compétence, puis son coefficient, autant de fois que nécessaire
+        - "", puis 0, suffisamment de fois pour atteindre nombreCompétencesMax paires str,int.
+        """
+        liste = []
+        for q in self.questions:
+            cp_coeff = [ q[0] ]
+            for comp,coef in q[1]:
+                cp_coeff += [ comp, coef ]
+            cp_coeff += ["",0]*(nombreCompétencesMax-len(cp_coeff)//2)
+            liste.append(cp_coeff)
+        return(liste)
+
+    def set_questionsDepuisModèle(self, modèle:list, compétences:list) -> None:
+        """
+        Fonction utilisée pour mettre à jour les questions depuis la forme adaptée à un Gtk.ListStore.
+        Vérifie que les compétences proposées sont bien dans la liste compétences avant de valider.
+
+        Chaque élément de la liste est une liste contenant :
+        - le nom de la question
+        - le nom de la compétence, puis son coefficient, autant de fois que nécessaire
+        - "", puis 0, suffisamment de fois pour atteindre nombreCompétencesMax paires str,int.
+        """
+        self.questions.clear()
+        nombreCompétencesMax = (len(modèle[0])-1)//2
+        for q in modèle[:-1]:
+            nom = q[0]
+            comps = [ (q[2*i+1],q[2*i+2]) for i in range(nombreCompétencesMax) if q[2*i+1] in compétences ]
+            self.questions.append((nom,comps))
+
+    def test_créerQuestionsDevoir(self):
+        """
+        Auto-génère une liste de questions pour les tests.
+        Cette fonction n'est pas censée être utilisée hors des tests.
+        """
+        q1 = ("1.",[("Connaître les dimensions fondamentales",1),("Connaître les dimensions dérivées",1)])
+        q2 = ("2.a.",[("Vérifier l'homogénéité",2)])
+        q3 = ("2.b.",[("Prévoir un résultat par AD",3)])
+        self.questions = [q1,q2,q3]

@@ -381,20 +381,19 @@ class FenêtrePrincipale(object):
         - L'afficheur est identifié par son identifiant glade
         - msgErr est utilisée en cas d'absence de sélection de la part de l'utilisateur
 
-        Renvoie une paire contenant le modèle lié à l'affichage (en supposant qu'il y a deux étapes
-        entre le modèle et l'affichage : tri et filtre) et l'itérateur sélectionné ; s'il n'y a pas
-        de sélection, renvoie (None,None).
+        Renvoie une paire contenant le modèle lié à l'affichage et l'itérateur sélectionné ;
+        s'il n'y a pas de sélection, renvoie (None,None).
         """
         modèleSup, it = self.builder.get_object(afficheur).get_selection().get_selected()
         if it is None:
             FenêtresInformation.affichageErreur(self.fenêtrePrincipale,msgErr)
             return((None,None))
         else:
-            iterInterm = modèleSup.convert_iter_to_child_iter(it)
-            modèleInter = modèleSup.get_model()
-            iterFinal = modèleInter.convert_iter_to_child_iter(iterInterm)
-            modèleFinal = modèleInter.get_model()
-            return(modèleFinal, iterFinal)
+            modèle = modèleSup
+            while hasattr(modèle,'get_model'):
+                it = modèle.convert_iter_to_child_iter(it)
+                modèle =  modèle.get_model()
+            return(modèle, it)
 
     def suppressionDepuisAfficheurListe(self, afficheur:str, texteConfirmation:'function', msgErr:str) -> None:
         """

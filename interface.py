@@ -124,7 +124,7 @@ class FenetreDemande(Gtk.Dialog):
 
     Peut gérer le cas de la construction avec plusieurs champs.
     """
-    def __init__(self, parent:Gtk.Window, label:str, demandes:list):
+    def __init__(self, parent:Gtk.Window, label:str, demandes:list, **kwargs):
         """
         Constructeur.
 
@@ -136,6 +136,9 @@ class FenetreDemande(Gtk.Dialog):
           les entrées du ListStore, colonne int.
         - si choix est la str "date" alors un calendrier est inséré et une date est demandée
         - si choix est la str "fichier", alors un bouton donnant accès à un sélecteur de fichiers est inséré
+
+        Le paramètre défauts est optionnel : il s'agit d'un dictionnaire reliant la clé "label" (associée à la
+        liste demandes) avec une éventuelle valeur par défaut.
         """
         Gtk.Dialog.__init__(self, " ", parent, 0,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -148,34 +151,45 @@ class FenetreDemande(Gtk.Dialog):
         ligne = 0
         self.demandes = demandes
         self.fichiers = []  # utilisé dans le cas de demandes de fichiers
+        # gestion des kwargs
+        défauts, infobulles = {}, {}
+        if "défauts" in kwargs:
+            défauts = kwargs["défauts"]
+        if "infobulles" in kwargs:
+            infobulles = kwargs["infobulles"]
         for txt,dem in demandes:
-            self.grille.attach(Gtk.Label(txt),0,ligne,1,1)
+            label = Gtk.Label(txt)
+            self.grille.attach(label,0,ligne,1,1)
             if type(dem) == str and "libre_" in dem:
-                saisie = Gtk.Entry()
-                saisie.set_hexpand(True)
-                saisie.set_activates_default(True)
-                self.grille.attach(saisie,1,ligne,1,1)
+                widget = Gtk.Entry()
+                widget.set_hexpand(True)
+                widget.set_activates_default(True)
+                if txt in défauts:
+                    widget.set_text(str(défauts[txt]))
+                self.grille.attach(widget,1,ligne,1,1)
             elif type(dem) == str and dem == "date":
-                cal = Gtk.Calendar()
-                cal.set_hexpand(True)
-                self.grille.attach(cal,1,ligne,1,1)
+                widget = Gtk.Calendar()
+                widget.set_hexpand(True)
+                self.grille.attach(widget,1,ligne,1,1)
             elif type(dem) == str and dem == "fichier":
-                bouton = Gtk.Button("Choisir fichier")
-                bouton.connect("clicked", self.sousFenêtreFichier, len(self.fichiers))
-                self.grille.attach(bouton,1,ligne,1,1)
+                widget = Gtk.Button("Choisir fichier")
+                widget.connect("clicked", self.sousFenêtreFichier, len(self.fichiers))
+                self.grille.attach(widget,1,ligne,1,1)
                 self.fichiers.append(None)
             elif type(dem) == tuple:
-                comboBox = Gtk.ComboBox.new_with_model(dem[0])
-                comboBox.set_hexpand(True)
+                widget = Gtk.ComboBox.new_with_model(dem[0])
+                widget.set_hexpand(True)
                 renderer = Gtk.CellRendererText()
-                comboBox.pack_start(renderer, True)
-                comboBox.add_attribute(renderer, "text", dem[1])
-                self.grille.attach(comboBox,1,ligne,1,1)
+                widget.pack_start(renderer, True)
+                widget.add_attribute(renderer, "text", dem[1])
+                self.grille.attach(widget,1,ligne,1,1)
             else:
                 FenêtresInformation.affichageErreur(self, \
                                                     "Demande non gérée dans le constructeur de FenetreDemande ; " \
                                                     "le type proposé est {}".format(type(dem)))
             ligne += 1
+            if txt in infobulles:
+                label.set_tooltip_text(infobulles[txt])
         boutonOk = self.get_widget_for_response(response_id=Gtk.ResponseType.OK)
         boutonOk.set_can_default(True)
         boutonOk.grab_default()
@@ -437,7 +451,7 @@ class FenêtrePrincipale(object):
             if FenêtresInformation.demandeConfirmation(self.fenêtrePrincipale,msg):
                 modèle.remove(it)
 
-    def créationNouvelObjet(self, label:str, demandes:list) -> list:
+    def créationNouvelObjet(self, label:str, demandes:list, **kwargs) -> list:
         """
         Fonction générique utilisée pour la création d'un nouvel objet.
 
@@ -449,7 +463,7 @@ class FenêtrePrincipale(object):
         Renvoie la liste correspondant aux données demandées s'il y a réponse, None sinon.
         """
         # Préparation de la fenêtre
-        dialogue = FenetreDemande(self.fenêtrePrincipale, label, demandes)
+        dialogue = FenetreDemande(self.fenêtrePrincipale, label, demandes, **kwargs)
         réponse = dialogue.run()
         liste = dialogue.récupèreInfos()
         dialogue.destroy()
@@ -575,7 +589,7 @@ class FenêtrePrincipale(object):
         for dv in data_devoir:
             étudiants = [(a[1],a[2]) for a in data_étudiants if a[0] == dv[0]]
             self.modèleDevoir.append(dv)
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],étudiants))
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],2,étudiants))
         self.devoirs[0].test_créerQuestionsDevoir()
 
     def créerNouveauDevoirType(self,dummy):
@@ -609,18 +623,24 @@ class FenêtrePrincipale(object):
         filtreT = self.modèleDevoirType.filter_new()
         filtreC.set_visible_func(self.filtreModifiables)
         filtreT.set_visible_func(self.filtreModifiables)
-        explication = "Vous pouvez optionnellement charger un fichier définissant les questions, chaque ligne " \
-                      "correspondant à une question sous la forme :\n" \
-                      "nomQuestion;compétence1;coeffCompétence1;compétence2;coeffCompétence2..."
+        str_fich = "Fichier de questions (optionnel)"
+        explication_fich = "Vous pouvez optionnellement charger un fichier définissant les questions, chaque ligne " \
+                           "correspondant à une question sous la forme :\n" \
+                           "nomQuestion;compétence1;coeffCompétence1;compétence2;coeffCompétence2..."
+        str_niveauxComp = "Niveaux d'acquisition"
+        explication_nvx = "Le nombre de niveaux d'acquisition (pour un simple acquis/non acquis, mettez 2 ; " \
+                          "pour acquis/en cours d'acquisition/non acquis, mettez 3 etc..."
         demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre_int"), ("Date","date"), \
-                    (explication,"fichier")]
-        dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes)
+                    (str_niveauxComp,"libre_int"),(str_fich,"fichier")]
+        déf = {str_niveauxComp:2}
+        infos= {str_niveauxComp:explication_nvx, str_fich:explication_fich}
+        dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes, défauts=déf, infobulles=infos)
         if dv is not None:
             étudiants = [ (a[0],a[1]) for a in self.modèleÉtudiants if a[0] == dv[0] ]
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],étudiants))
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],dv[4],étudiants))
             self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
-            if dv[4] != None:
-                fichier = open(dv[4],'r')
+            if dv[5] != None:
+                fichier = open(dv[5],'r')
                 questions = []
                 try:
                     for ligne in fichier:

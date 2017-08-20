@@ -28,10 +28,15 @@ class Devoir(object):
     - self.coeff est un np.ndarray(int) de dimension 2 dont la ième ligne, jième colonne contient
                  le coefficient de la compétence n°j dans la question n°i ; elle est limitée en
                  nombre de questions et en nombre de compétences.
+    - self.nvxAcq est un int contenant le nombre de niveaux pour l'évaluation (par exemple 2 pour acqui/non acquis
+                  ou 3 pour acquis/en cours/non acquis)
+    - self.éval est un np.ndarray(int) de dimension 3 dont la ième ligne, jième colonne, kième cote contient
+                l'évaluation de la compétence n°j dans la question n°i par l'étudiant n°k ; elle est limitée
+                en nombre de questions et en nombre de compétences. Elle ne doit pas contenir de case > nvxAcq
     """
     maxQuestions = 100
     maxCompétences = 100
-    def __init__(self, classe:str, typ:str, num:int, date:str, étudiants:list) -> 'Devoir':
+    def __init__(self, classe:str, typ:str, num:int, date:str, nvxAcq:int, étudiants:list) -> 'Devoir':
         """
         Constructeur.
 
@@ -48,6 +53,8 @@ class Devoir(object):
         self.questions = np.array([""]*Devoir.maxQuestions,dtype=object)
         self.compétences = np.array([""]*Devoir.maxCompétences,dtype=object)
         self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
+        self.nvxAcq = nvxAcq
+        self.éval = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences,len(self.étudiants)),dtype=int)
 
     def copie(self):
         """

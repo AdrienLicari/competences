@@ -49,7 +49,8 @@ class Devoir(object):
         self.typ = typ
         self.num = num
         self.date = date
-        self.étudiants = np.array([ (a[0],a[1],True) for a in étudiants ])
+        self.étudiants = [ (a[0],a[1],True) for a in étudiants ]
+        self.étudiants.sort(key=lambda a: a[0])
         self.questions = np.array([""]*Devoir.maxQuestions,dtype=object)
         self.compétences = np.array([""]*Devoir.maxCompétences,dtype=object)
         self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
@@ -84,6 +85,21 @@ class Devoir(object):
         Fonction interne utilitaire
         """
         return(len([ a for a in self.compétences if a != '' ]))
+
+    def get_enTêteDevoir(self) -> str:
+        """
+        Fonction renvoyant la str "devoir {type} {num} de la classe {classe} - {date}
+        """
+        return("devoir {} {} de la classe {} - {}".format(self.typ,self.num,self.classe,self.date))
+
+    def get_listeÉtudiantsModèle(self) -> list:
+        """
+        Propose la liste des étudiants pour sélection, sous la forme [[id,nomPrénom,présent],...]
+        """
+        liste = [0]*len(self.étudiants)
+        for k,ét in enumerate(self.étudiants):
+            liste[k] = [k, ét[1]+" "+ét[0], ét[2]]
+        return(liste)
 
     def get_listeQuestionsModèle(self, nombreCompétencesMax:int) -> list:
         """

@@ -243,7 +243,7 @@ class FenetreDemande(Gtk.Dialog):
 
 
 ## Classe pour la création des questions d'un devoir
-class FenetreQuestionsDevoir():
+class FenêtreQuestionsDevoir(object):
     """
     Classe gérant la construction d'une fenêtre popup pour la définition des questions /
         compétences associées à un devoir.
@@ -252,6 +252,7 @@ class FenetreQuestionsDevoir():
 
     Ne gère pas l'attachement de plus de 10 compétences à chaque question.
     """
+    maxCompétenceParQuestion = 10
     def __init__(self, devoir:Devoir, builder:Gtk.Builder):
         """
         Constructeur de la fenêtre.
@@ -259,15 +260,13 @@ class FenetreQuestionsDevoir():
         Utilise le patron disponible dans le .glade, donné par le Gtk.Builder, puis modifie
         les lignes en fonction des besoins du devoir considéré.
         """
-        self.maxCompétenceParQuestion = 10
+
         self.devoir_save = devoir
         self.fenêtre = builder.get_object("fenêtreQuestionsDevoir")
         self.treeview = builder.get_object("fenêtreQuestionsDevoirAfficheur")
-        titre_str = "Mise en place des questions du devoir {} {} de la classe {} - {}".\
-                    format(devoir.typ,devoir.num,devoir.classe,devoir.date)
-        self.fenêtre.set_title(titre_str)
+        self.fenêtre.set_title("Mise en place des questions du " + devoir.get_enTêteDevoir())
         builder.get_object("fenêtreQuestionsDevoirAppliquer").connect("clicked",self.sauvegarderCompétences)
-        # Mise en place du modèle - doit être cohérent avec self.maxCompétenceParQuestion
+        # Mise en place du modèle - doit être cohérent avec FenêtreQuestionsDevoir.maxCompétenceParQuestion
         self.modèle = Gtk.ListStore(str, \
                                     str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int)
         self.màjModèle()
@@ -281,7 +280,7 @@ class FenetreQuestionsDevoir():
         rdNuméro.set_property("editable",True)
         rdNuméro.connect("edited", self.celluleÉditée, 0)
         self.vue.append_column(Gtk.TreeViewColumn("N°",rdNuméro,text=0))
-        for i in range(self.maxCompétenceParQuestion):
+        for i in range(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
             col = Gtk.TreeViewColumn("Compétence {}".format(i+1))
             completion = Gtk.EntryCompletion()
             rdComp = CellRendererAutoComplete(completion)
@@ -313,7 +312,7 @@ class FenetreQuestionsDevoir():
         Fonction interne pour ajouter une ligne vide au modèle, servant à créer une nouvelle question.
         """
         nom = ""
-        cp_coeff = ["",0]*self.maxCompétenceParQuestion
+        cp_coeff = ["",0]*FenêtreQuestionsDevoir.maxCompétenceParQuestion
         self.modèle.append([nom]+cp_coeff)
 
     def màjModèle(self) -> None:
@@ -324,7 +323,7 @@ class FenetreQuestionsDevoir():
         Si question est None, une ligne vide est ajoutée.
         """
         self.modèle.clear()
-        for q in self.devoir_save.get_listeQuestionsModèle(self.maxCompétenceParQuestion):
+        for q in self.devoir_save.get_listeQuestionsModèle(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
             self.modèle.append(q)
         self.ajouterLigne()
 
@@ -347,7 +346,7 @@ class FenetreQuestionsDevoir():
         nbCols = max([ len(a) for a in listeCompétences ]) + 2
         for i in range(1,nbCols):
             self.vue.get_column(i).set_visible(True)
-        for i in range(nbCols,self.maxCompétenceParQuestion+1):
+        for i in range(nbCols,FenêtreQuestionsDevoir.maxCompétenceParQuestion+1):
             self.vue.get_column(i).set_visible(False)
 
     def sauvegarderCompétences(self,dummy):
@@ -360,6 +359,42 @@ class FenetreQuestionsDevoir():
         self.devoir_save.set_questionsDepuisModèle(listeModèle, listeCompétences)
         self.màjModèle()
 
+
+## Classe pour la saisie des évaluations lors d'un devoir
+class FenêtreÉvaluationDevoir(object):
+    """
+    Classe gérant la construction d'une fenêtre popup pour l'évaluation d'un devoir
+    par compétences.
+
+    Doit reçevoir un objet Devoir en paramètre.
+    """
+    def __init__(self, devoir:Devoir, builder:Gtk.Builder):
+        """
+        Constructeur de la fenêtre.
+
+        Utilise le patron disponible dans le .glade, donné par le Gtk.Builder, puis modifie
+        les lignes en fonction des besoins du devoir considéré.
+        """
+        # Récupération de la fenêtre et des objets
+        self.fenêtre = builder.get_object("fenêtreÉvaluationDevoir")
+        self.grille = builder.get_object("fenêtreÉvaluationDevoirGrille")
+        self.sélecteurÉtudiant = builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant")
+        self.switchPrésence = builder.get_object("fenêtreÉvaluationDevoirSwitchPrésence")
+        self.fenêtre.set_title("Évaluation du " + devoir.get_enTêteDevoir())
+        # Préparation des attributs autres
+        self.devoir_save = devoir
+        # Sélection des étudiants
+        self.modèleÉtudiants = Gtk.ListStore(int,str,bool)
+        for ét in devoir.get_listeÉtudiantsModèle():
+            self.modèleÉtudiants.append(ét)
+        self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
+        renderer_étudiant = Gtk.CellRendererText()
+        self.sélecteurÉtudiant.pack_start(renderer_étudiant, True)
+        self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", 1)
+        # Lancement
+        self.fenêtre.show_all()
+        réponse = self.fenêtre.run()
+        self.fenêtre.hide()
 
 ## Classe de la fenêtre principale
 class FenêtrePrincipale(object):
@@ -671,13 +706,24 @@ class FenêtrePrincipale(object):
     def modifierQuestionsDevoir(self,dummy):
         """
         Callback utilisé pour la modification des questions dans un devoir.
-        Délègue à la classe FenetreQuestionsDevoir.
+        Délègue à la classe FenêtreQuestionsDevoir.
         """
         modèle,it = self.sélectionDepuisAfficheurListe("afficheurDevoirs", \
                                                        "Vous n'avez pas sélectionné de devoir")
         if it is not None:
             dev = [d for d in self.devoirs if d.correspondÀ(modèle[it])][0]
-            fenêtreQuestions = FenetreQuestionsDevoir(dev, self.builder)
+            fenêtreQuestions = FenêtreQuestionsDevoir(dev, self.builder)
+
+    def évaluerDevoir(self,dummy):
+        """
+        Callback utilisé pour lancer l'évaluation d'un devoir.
+        Délègue à la classe FenêtreÉvaluationDevoir.
+        """
+        modèle,it = self.sélectionDepuisAfficheurListe("afficheurDevoirs", \
+                                                       "Vous n'avez pas sélectionné de devoir")
+        if it is not None:
+            dev = [d for d in self.devoirs if d.correspondÀ(modèle[it])][0]
+            fenêtreÉvaluation = FenêtreÉvaluationDevoir(dev, self.builder)
 
     def filtreVisibilitéDevoirs(self,model,it,data):
         """

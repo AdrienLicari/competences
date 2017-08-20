@@ -334,7 +334,8 @@ class FenetreQuestionsDevoir():
         """
         Callback utilisé pour mettre à jour l'objet Devoir sous-jacent à partir du modèle.
         """
-        listeModèle = [ ligne[:] for ligne in self.modèle[:-1] ]  # on enlève la ligne vide
+        listeModèle = [ ligne[:] for ligne in self.modèle ]
+        listeModèle.pop()  # on enlève la ligne vide
         listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
         self.devoir_save.set_questionsDepuisModèle(listeModèle, listeCompétences)
         self.màjModèle()
@@ -572,8 +573,9 @@ class FenêtrePrincipale(object):
             self.modèleDevoirType.append([dt])
         self.builder.get_object("sélecteurDevoirType").set_active(0)
         for dv in data_devoir:
+            étudiants = [(a[1],a[2]) for a in data_étudiants if a[0] == dv[0]]
             self.modèleDevoir.append(dv)
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],étudiants))
         self.devoirs[0].test_créerQuestionsDevoir()
 
     def créerNouveauDevoirType(self,dummy):
@@ -614,7 +616,8 @@ class FenêtrePrincipale(object):
                     (explication,"fichier")]
         dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes)
         if dv is not None:
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
+            étudiants = [ (a[0],a[1]) for a in self.modèleÉtudiants if a[0] == dv[0] ]
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],étudiants))
             self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
             if dv[4] != None:
                 fichier = open(dv[4],'r')

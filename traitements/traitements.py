@@ -15,28 +15,48 @@ class Devoir(object):
     Contient le type et numéro du devoir, la classe associée, la date, et la liste des
     questions, chacune associée à la liste des compétences testées, chaque compétence étant
     associée à un coefficient.
+
+    Représentation interne des données :
+    - self.classe est une str contenant le nom de la classe
+    - self.typ est une str contenant la catégorie du devoir
+    - self.num est un int contenant le numéro du devoir
+    - self.date est une str contenant la date du devoir
+    - self.étudiants est un np.ndarray((str,str,bool)) contenant les paires (nom,prénom,présent) des étudiants
+                     de la classe ; présent contient False si l'étudiant était absent.
+    - self.questions est une np.ndarray(str) contenant les noms des questions
+    - self.compétences est une np.ndarray(str) contenant les noms des compétences évaluées
+    - self.coeff est un np.ndarray(int) de dimension 2 dont la ième ligne, jième colonne contient
+                 le coefficient de la compétence n°j dans la question n°i ; elle est limitée en
+                 nombre de questions et en nombre de compétences.
     """
-    def __init__(self, classe:str, typ:str, num:int, date:str) -> 'Devoir':
+    maxQuestions = 100
+    maxCompétences = 100
+    def __init__(self, classe:str, typ:str, num:int, date:str, étudiants:list) -> 'Devoir':
         """
         Constructeur.
 
         Un devoir est construit avec ses données générales mais les questions sont
         ajoutées ensuite.
-        La liste self.questions contient des paires ("nom_question",[("nom_compétence",coeff)])
+
+        étudiants est une liste de paires (nom,prénom)
         """
         self.classe = classe
         self.typ = typ
         self.num = num
         self.date = date
-        self.questions = []
+        self.étudiants = np.array([ (a[0],a[1],True) for a in étudiants ])
+        self.questions = np.array([""]*Devoir.maxQuestions,dtype=object)
+        self.compétences = np.array([""]*Devoir.maxCompétences,dtype=object)
+        self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
 
     def copie(self):
         """
         Constructeur de copie
         """
-        dev_tmp = Devoir(self.classe, self.typ, self.num, self.date)
-        for q in self.questions:
-            dev_tmp.append((q[0],q[1][:]))
+        dev_tmp = Devoir(self.classe, self.typ, self.num, self.date, self.étudiants)
+        dev_tmp.questions = self.questions.copy()
+        dev_tmp.compétences = self.compétences.copy()
+        dev_tmp.coeff = self.coeff.copy()
         return(dev_tmp)
 
     def correspondÀ(self, liste:list) -> bool:
@@ -46,25 +66,17 @@ class Devoir(object):
         return(self.classe == liste[0] and self.typ == liste[1] \
                and self.num == liste[2] and self.date == liste[3])
 
-    def ajouterQuestion(self, nom:str, compétences_coef:list) -> None:
+    def actuelNombreQuestions(self) -> int:
         """
-        Fonction utilisée pour ajouter des questions, associées à des compétences et des
-        coefficients.
+        Fonction interne utilitaire
+        """
+        return(len([ a for a in self.questions if a != '' ]))
 
-        La liste contient des paires ("nom_compétence",coeff)
+    def actuelNombreCompétences(self) -> int:
         """
-        self.questions.append((nom,compétences_coef))
-        self.questions.sort(key=lambda x: x[0])
-
-    def changerQuestion(self, num:int, nom:str, compétences_coef:list) -> None:
+        Fonction interne utilitaire
         """
-        Fonction utilisée pour modifier la num-ième question, associée à des compétences et des
-        coefficients.
-
-        La liste contient des paires ("nom_compétence",coeff)
-        """
-        self.question[num] = (nom,compétences_coef)
-        self.questions.sort(key=lambda x: x[0])
+        return(len([ a for a in self.compétences if a != '' ]))
 
     def get_listeQuestionsModèle(self, nombreCompétencesMax:int) -> list:
         """
@@ -76,10 +88,11 @@ class Devoir(object):
         - "", puis 0, suffisamment de fois pour atteindre nombreCompétencesMax paires str,int.
         """
         liste = []
-        for q in self.questions:
-            cp_coeff = [ q[0] ]
-            for comp,coef in q[1]:
-                cp_coeff += [ comp, coef ]
+        for i,q in enumerate(self.questions[self.questions != ""]):
+            cp_coeff = [ q ]
+            comps = [(j,a) for (j,a) in enumerate(self.compétences) if self.coeff[i,j] != 0]
+            for j,nom in comps:
+                cp_coeff += [ nom, self.coeff[i,j] ]
             cp_coeff += ["",0]*(nombreCompétencesMax-len(cp_coeff)//2)
             liste.append(cp_coeff)
         return(liste)
@@ -94,12 +107,19 @@ class Devoir(object):
         - le nom de la compétence, puis son coefficient, autant de fois que nécessaire
         - "", puis 0, éventuellement répété un certain nombre de fois
         """
-        self.questions.clear()
         for q in modèle:
             nombreCompétencesMax = (len(q)-1)//2
             nom = q[0]
-            comps = [ (q[2*i+1],q[2*i+2]) for i in range(nombreCompétencesMax) if q[2*i+1] in compétences ]
-            self.questions.append((nom,comps))
+            comps = [ q[2*i+1] for i in range(nombreCompétencesMax) if q[2*i+1] in compétences ]
+            coefs = [ q[2*i+2] for i in range(nombreCompétencesMax) if q[2*i+1] in compétences ]
+            if nom not in self.questions:
+                self.questions[self.actuelNombreQuestions()] = nom
+            i = np.where(self.questions == nom)[0]
+            for (k,comp) in enumerate(comps):
+                if comp not in self.compétences:
+                    self.compétences[self.actuelNombreCompétences()] = comp
+                j = np.where(self.compétences == comp)[0]
+                self.coeff[i,j] = coefs[k]
 
     def test_créerQuestionsDevoir(self):
         """
@@ -109,4 +129,10 @@ class Devoir(object):
         q1 = ("1.",[("Connaître les dimensions fondamentales",1),("Connaître les dimensions dérivées",1)])
         q2 = ("2.a.",[("Vérifier l'homogénéité",2)])
         q3 = ("2.b.",[("Prévoir un résultat par AD",3)])
-        self.questions = [q1,q2,q3]
+        for q in [q1,q2,q3]:
+            self.questions[self.actuelNombreQuestions()] = q[0]
+            for comp in q[1]:
+                if comp[0] not in self.compétences:
+                    self.compétences[self.actuelNombreCompétences()] = comp[0]
+                i,j = np.where(self.questions == q[0])[0], np.where(self.compétences == comp[0])[0]
+                self.coeff[i,j] = comp[1]

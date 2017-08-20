@@ -137,8 +137,11 @@ class FenetreDemande(Gtk.Dialog):
         - si choix est la str "date" alors un calendrier est inséré et une date est demandée
         - si choix est la str "fichier", alors un bouton donnant accès à un sélecteur de fichiers est inséré
 
-        Le paramètre défauts est optionnel : il s'agit d'un dictionnaire reliant la clé "label" (associée à la
-        liste demandes) avec une éventuelle valeur par défaut.
+        Les paramètres par keywords sont optionnels:
+        - défauts est un dictionnaire reliant la clé "label" (associée à la liste demandes)
+          avec une éventuelle valeur par défaut.
+        - infobulles est un dictionnaire reliant la clé "label" (associée à la liste demandes)
+          avec une infobulle à placer sur le label
         """
         Gtk.Dialog.__init__(self, " ", parent, 0,
             (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
@@ -157,8 +160,11 @@ class FenetreDemande(Gtk.Dialog):
             défauts = kwargs["défauts"]
         if "infobulles" in kwargs:
             infobulles = kwargs["infobulles"]
+        # mise en place des paires label / widgets
         for txt,dem in demandes:
             label = Gtk.Label(txt)
+            label.set_xalign(1)
+            label.set_yalign(0)
             self.grille.attach(label,0,ligne,1,1)
             if type(dem) == str and "libre_" in dem:
                 widget = Gtk.Entry()

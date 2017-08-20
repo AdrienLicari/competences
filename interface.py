@@ -131,7 +131,7 @@ class FenetreDemande(Gtk.Dialog):
         Permet de créer la fenêtre qui aura les demandes fournies.
 
         La liste demandes contient des paires (label, choix). Les possibilités sont les suivantes :
-        - si choix est la str "libre", alors une entrée clavier est demandée ;
+        - si choix est une str du type "libre_type", alors une entrée clavier est demandée ;
         - si choix est une paire (ListStore,int), alors on demande à l'utilisateur de choisir parmi
           les entrées du ListStore, colonne int.
         - si choix est la str "date" alors un calendrier est inséré et une date est demandée
@@ -150,7 +150,7 @@ class FenetreDemande(Gtk.Dialog):
         self.fichiers = []  # utilisé dans le cas de demandes de fichiers
         for txt,dem in demandes:
             self.grille.attach(Gtk.Label(txt),0,ligne,1,1)
-            if type(dem) == str and dem == "libre":
+            if type(dem) == str and "libre_" in dem:
                 saisie = Gtk.Entry()
                 saisie.set_hexpand(True)
                 saisie.set_activates_default(True)
@@ -161,8 +161,9 @@ class FenetreDemande(Gtk.Dialog):
                 self.grille.attach(cal,1,ligne,1,1)
             elif type(dem) == str and dem == "fichier":
                 bouton = Gtk.Button("Choisir fichier")
-                bouton.connect("clicked", self.sousFenêtreFichier)
+                bouton.connect("clicked", self.sousFenêtreFichier, len(self.fichiers))
                 self.grille.attach(bouton,1,ligne,1,1)
+                self.fichiers.append(None)
             elif type(dem) == tuple:
                 comboBox = Gtk.ComboBox.new_with_model(dem[0])
                 comboBox.set_hexpand(True)
@@ -188,13 +189,12 @@ class FenetreDemande(Gtk.Dialog):
         retours = []
         i = 0
         for txt,dem in self.demandes:
-            if type(dem) == str and dem == "libre":
+            if type(dem) == str and "libre" in dem:
                 retours.append(self.grille.get_child_at(1,i).get_text())
             elif type(dem) == str and dem == "date":
                 date = self.grille.get_child_at(1,i).get_date()
                 date_str = "{:02d}.{:02d}.{:4d}".format(date[2],date[1],date[0])
                 retours.append(date_str)
-                i -= 1
             elif type(dem) == str and dem == "fichier":
                 retours.append(self.fichiers[0])
                 self.fichiers.pop(0)
@@ -204,7 +204,7 @@ class FenetreDemande(Gtk.Dialog):
             i += 1
         return(retours)
 
-    def sousFenêtreFichier(self, bouton:Gtk.Button):
+    def sousFenêtreFichier(self, bouton:Gtk.Button, numFichier:int) -> None:
         """
         Callback utilisé pour lancer une fenêtre sélecteur de fichier.
 
@@ -216,9 +216,9 @@ class FenetreDemande(Gtk.Dialog):
              Gtk.STOCK_OPEN, Gtk.ResponseType.OK))
         réponse = dialogue.run()
         if réponse == Gtk.ResponseType.OK:
-            self.fichiers.append(dialogue.get_filename())
+            self.fichiers[numFichier] = dialogue.get_filename()
         dialogue.destroy()
-        nomFichier = self.fichiers[-1].split("/")[-1]
+        nomFichier = self.fichiers[numFichier].split("/")[-1]
         bouton.set_label(nomFichier)
 
 
@@ -334,7 +334,7 @@ class FenetreQuestionsDevoir():
         """
         Callback utilisé pour mettre à jour l'objet Devoir sous-jacent à partir du modèle.
         """
-        listeModèle = [ ligne[:] for ligne in self.modèle]
+        listeModèle = [ ligne[:] for ligne in self.modèle[:-1] ]  # on enlève la ligne vide
         listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
         self.devoir_save.set_questionsDepuisModèle(listeModèle, listeCompétences)
         self.màjModèle()
@@ -436,18 +436,16 @@ class FenêtrePrincipale(object):
             if FenêtresInformation.demandeConfirmation(self.fenêtrePrincipale,msg):
                 modèle.remove(it)
 
-    def créationNouvelObjet(self, label:str, demandes:list, modèle:Gtk.ListStore) -> list:
+    def créationNouvelObjet(self, label:str, demandes:list) -> list:
         """
         Fonction générique utilisée pour la création d'un nouvel objet.
 
         La liste demandes contient des paires (label, choix). Les possibilités sont documentées dans la
-        docstring de FenetreDemande.__init__
+        docstring de FenetreDemande.__init__ ; les demandes de type libre_str ou libre_int permettent de
+        demander des conversions.
+        Ces conversions peuvent lever une ValueError. Elle doit être gérée par l'appelant.
 
-        Les champs demandés doivent l'être dans l'ordre du modèle sous-jacent. modèle est le modèle à peupler.
-
-        Si modèle contient des int, la conversion peut lever une ValueError. Elle doit être gérée par l'appelant.
-
-        Renvoie la liste correspondant aux données ajoutées dans le modèle si l'ajout est réussi, None sinon.
+        Renvoie la liste correspondant aux données demandées s'il y a réponse, None sinon.
         """
         # Préparation de la fenêtre
         dialogue = FenetreDemande(self.fenêtrePrincipale, label, demandes)
@@ -456,7 +454,7 @@ class FenêtrePrincipale(object):
         dialogue.destroy()
         if réponse == Gtk.ResponseType.OK:
             for i in range(len(liste)):
-                if type(modèle[0][i]) == int:
+                if type(demandes[i][1]) == str and demandes[i][1] == "libre_int":
                     try:
                         liste[i] = int(liste[i])
                     except(ValueError):
@@ -464,10 +462,7 @@ class FenêtrePrincipale(object):
                                                             "Un champ de type entier a été mal entré.")
             if "" in liste:
                 FenêtresInformation.affichageErreur(dialogue,"Vous devez remplir tous les champs")
-            elif liste in [a[:] for a in modèle]:
-                FenêtresInformation.affichageErreur(dialogue,"Cet élément existe déjà")
             else:
-                modèle.append(liste)
                 return(liste)
             return(None)
 
@@ -497,9 +492,13 @@ class FenêtrePrincipale(object):
         """
         Callback utilisé pour la création d'une nouvelle classe.
         """
-        self.créationNouvelObjet("Entrez le nom de la nouvelle classe",\
-                                 [("Nom","libre")], \
-                                 self.modèleClasses)
+        liste = self.créationNouvelObjet("Entrez le nom de la nouvelle classe",\
+                                         [("Nom","libre_str")])
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleClasses ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cette classe existe déjà")
+            else:
+                self.modèleClasses.append(liste)
 
     def supprimerClasse(self,dummy):
         """
@@ -518,9 +517,13 @@ class FenêtrePrincipale(object):
         """
         filtre = self.modèleClasses.filter_new()
         filtre.set_visible_func(self.filtreModifiables)
-        self.créationNouvelObjet("Entrez le nouvel étudiant",\
-                                 [("Classe",(filtre,0)),("Nom","libre"),("Prénom","libre")], \
-                                 self.modèleÉtudiants)
+        liste = self.créationNouvelObjet("Entrez le nouvel étudiant",\
+                                         [("Classe",(filtre,0)),("Nom","libre_str"),("Prénom","libre_str")])
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleÉtudiants ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cet étudiant existe déjà")
+            else:
+                self.modèleÉtudiants.append(liste)
 
     def ajouterÉtudiantsDepuisFichier(self,dummy):
         """
@@ -532,11 +535,8 @@ class FenêtrePrincipale(object):
         filtre.set_visible_func(self.filtreModifiables)
         explication = "Sélectionnez un fichier contenant un étudiant par ligne, nom puis prénom, " \
                       "séparés par un point-virgule."
-        dialogue = FenetreDemande(self.fenêtrePrincipale, "Ajouter une liste d'étudiants", \
-                                  [("Classe",(filtre,0)),(explication,"fichier")])
-        réponse = dialogue.run()
-        classe, nomFichier = dialogue.récupèreInfos()
-        dialogue.destroy()
+        classe, nomFichier = self.créationNouvelObjet("Ajouter une liste d'étudiants", \
+                                                      [("Classe",(filtre,0)),(explication,"fichier")])
         # Lecture du fichier
         séparateur = ";"
         fichier = open(nomFichier,'r')
@@ -580,9 +580,12 @@ class FenêtrePrincipale(object):
         """
         Callback pour créer un nouveau type de devoir.
         """
-        self.créationNouvelObjet("Créez un nouveau type de devoir", \
-                                 [("Nom","libre")], \
-                                 self.modèleDevoirType)
+        liste = self.créationNouvelObjet("Créez un nouveau type de devoir", [("Nom","libre_str")])
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleDevoirType ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce type de devoir existe déjà")
+            else:
+                self.modèleDevoirType.append(liste)
 
     def supprimerDevoirType(self,dummy):
         """
@@ -599,15 +602,34 @@ class FenêtrePrincipale(object):
         """
         Callback pour créer un nouveau devoir.
         """
+        séparateur = ";"
         filtreC = self.modèleClasses.filter_new()
         filtreT = self.modèleDevoirType.filter_new()
         filtreC.set_visible_func(self.filtreModifiables)
         filtreT.set_visible_func(self.filtreModifiables)
-        demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre"), ("Date","date")]
-        dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes, self.modèleDevoir)
+        explication = "Vous pouvez optionnellement charger un fichier définissant les questions, chaque ligne " \
+                      "correspondant à une question sous la forme :\n" \
+                      "nomQuestion;compétence1;coeffCompétence1;compétence2;coeffCompétence2..."
+        demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre_int"), ("Date","date"), \
+                    (explication,"fichier")]
+        dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes)
         if dv is not None:
             self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3]))
-        print(self.devoirs)
+            self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
+            if dv[4] != None:
+                fichier = open(dv[4],'r')
+                questions = []
+                try:
+                    for ligne in fichier:
+                        questions.append(ligne[:-1].split(séparateur))
+                        n = len(questions[-1])
+                        for i in [ k for k in range(n) if (k > 0 and k%2 == 0) ]:  # conversion des entiers
+                            questions[-1][i] = int(questions[-1][i])
+                    compétences = listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
+                    self.devoirs[-1].set_questionsDepuisModèle(questions, compétences)
+                except(ValueError):
+                    FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
+                                                        "Un coefficient n'est pas un nombre dans le fichier.")
 
     def supprimerDevoir(self,dummy):
         """
@@ -656,9 +678,12 @@ class FenêtrePrincipale(object):
         """
         Callback utilisé pour la création d'un nouveau type de compétence
         """
-        self.créationNouvelObjet("Entrez le nom du nouveau type de compétence.", \
-                                    [("Nom","libre")], \
-                                     self.modèleCompétenceType)
+        liste = self.créationNouvelObjet("Entrez le nom du nouveau type de compétence", [("Nom","libre_str")])
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleCompétenceType ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce type de compétence existe déjà")
+            else:
+                self.modèleCompétenceType.append(liste)
 
     def supprimerTypeCompétence(self,dummy):
         """
@@ -675,9 +700,12 @@ class FenêtrePrincipale(object):
         """
         Callback utilisé pour la création d'un nouveau type de compétence
         """
-        self.créationNouvelObjet("Entrez le nom du nouveau chapitre.", \
-                                 [("Nom","libre")], \
-                                 self.modèleCompétenceChapitre)
+        liste = self.créationNouvelObjet("Entrez le nom du nouveau chapitre.", [("Nom","libre_str")])
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleCompétenceChapitre ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce chapitre existe déjà")
+            else:
+                self.modèleCompétenceChapitre.append(liste)
 
     def supprimerChapitre(self,dummy):
         """
@@ -698,11 +726,13 @@ class FenêtrePrincipale(object):
         filtreType.set_visible_func(self.filtreModifiables)
         filtreChap = self.modèleCompétenceChapitre.filter_new()
         filtreChap.set_visible_func(self.filtreModifiables)
-        self.créationNouvelObjet("Créez une nouvelle compétence", \
-                                 [("Nom","libre"), \
-                                  ("Catégorie",(filtreType,0)), \
-                                  ("Chapitre",(filtreChap,0))], \
-                                 self.modèleCompétence)
+        demandes = [("Nom","libre_str"), ("Catégorie",(filtreType,0)), ("Chapitre",(filtreChap,0))]
+        liste = self.créationNouvelObjet("Créez une nouvelle compétence", demandes)
+        if liste is not None:
+            if liste in [ a[:] for a in self.modèleCompétence ]:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cette compétence existe déjà")
+            else:
+                self.modèleCompétence.append(liste)
 
     def supprimerCompétence(self,dummy):
         """

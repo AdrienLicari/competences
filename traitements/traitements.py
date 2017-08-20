@@ -92,11 +92,11 @@ class Devoir(object):
         Chaque élément de la liste est une liste contenant :
         - le nom de la question
         - le nom de la compétence, puis son coefficient, autant de fois que nécessaire
-        - "", puis 0, suffisamment de fois pour atteindre nombreCompétencesMax paires str,int.
+        - "", puis 0, éventuellement répété un certain nombre de fois
         """
         self.questions.clear()
-        nombreCompétencesMax = (len(modèle[0])-1)//2
-        for q in modèle[:-1]:
+        for q in modèle:
+            nombreCompétencesMax = (len(q)-1)//2
             nom = q[0]
             comps = [ (q[2*i+1],q[2*i+2]) for i in range(nombreCompétencesMax) if q[2*i+1] in compétences ]
             self.questions.append((nom,comps))

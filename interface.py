@@ -305,6 +305,8 @@ class FenêtreQuestionsDevoir(object):
         # Lancement
         self.fenêtre.show_all()
         réponse = self.fenêtre.run()
+        if réponse == Gtk.ResponseType.OK:
+            self.sauvegarderCompétences(None)
         self.fenêtre.hide()
 
     def ajouterLigne(self) -> None:
@@ -415,6 +417,8 @@ class FenêtreÉvaluationDevoir(object):
         # Lancement
         self.fenêtre.show_all()
         réponse = self.fenêtre.run()
+        if réponse == Gtk.ResponseType.OK:
+            self.sauvegarderÉvaluation(None)
         self.fenêtre.hide()
 
     def évaluationÉditée(self, cellule, path, text):
@@ -459,6 +463,7 @@ class FenêtreÉvaluationDevoir(object):
         uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > 0).any()
         présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
         self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtÉvalué] = uneÉval or not présence
+
 
 ## Classe de la fenêtre principale
 class FenêtrePrincipale(object):

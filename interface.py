@@ -697,7 +697,7 @@ class FenêtrePrincipale(object):
         for dv in data_devoir:
             étudiants = [(a[1],a[2]) for a in data_étudiants if a[0] == dv[0]]
             self.modèleDevoir.append(dv)
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],2,étudiants))
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],2,étudiants,20,[],[]))
         self.devoirs[0].test_créerQuestionsDevoir(True)
         self.devoirs[1].test_créerQuestionsDevoir()
 

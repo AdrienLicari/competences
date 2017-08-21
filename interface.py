@@ -261,7 +261,6 @@ class FenêtreQuestionsDevoir(object):
         Utilise le patron disponible dans le .glade, donné par le Gtk.Builder, puis modifie
         les lignes en fonction des besoins du devoir considéré.
         """
-
         self.devoir_save = devoir
         self.fenêtre = builder.get_object("fenêtreQuestionsDevoir")
         self.treeview = builder.get_object("fenêtreQuestionsDevoirAfficheur")
@@ -369,6 +368,8 @@ class FenêtreÉvaluationDevoir(object):
 
     Doit reçevoir un objet Devoir en paramètre.
     """
+    colÉtNo, colÉtNom, colÉtPrésence, colÉtÉvalué = 0,1,2,3
+    colQuest, colComp, colCoef, colÉval = 0,1,2,3
     def __init__(self, devoir:Devoir, builder:Gtk.Builder):
         """
         Constructeur de la fenêtre.
@@ -378,25 +379,86 @@ class FenêtreÉvaluationDevoir(object):
         """
         # Récupération de la fenêtre et des objets
         self.fenêtre = builder.get_object("fenêtreÉvaluationDevoir")
-        self.grille = builder.get_object("fenêtreÉvaluationDevoirGrille")
+        self.modèle = builder.get_object("fenêtreÉvaluationDevoirModèle")
+        self.vue = builder.get_object("fenêtreÉvaluationDevoirTreeView")
         self.sélecteurÉtudiant = builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant")
         self.switchPrésence = builder.get_object("fenêtreÉvaluationDevoirSwitchPrésence")
         self.fenêtre.set_title("Évaluation du " + devoir.get_enTêteDevoir())
         # Préparation des attributs autres
         self.devoir_save = devoir
+        self.étudiantActif = 0
         # Sélection des étudiants
-        self.modèleÉtudiants = Gtk.ListStore(int,str,bool)
+        self.modèleÉtudiants = Gtk.ListStore(int,str,bool,bool)
         for ét in devoir.get_listeÉtudiantsModèle():
-            self.modèleÉtudiants.append(ét)
+            self.modèleÉtudiants.append(ét + [False])
         self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
         renderer_étudiant = Gtk.CellRendererText()
+        renderer_étudiant.set_property("foreground","grey")
         self.sélecteurÉtudiant.pack_start(renderer_étudiant, True)
-        self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", 1)
+        self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", FenêtreÉvaluationDevoir.colÉtNom)
+        self.sélecteurÉtudiant.set_active(self.étudiantActif)
+        self.sélecteurÉtudiant.add_attribute(renderer_étudiant,'foreground-set',FenêtreÉvaluationDevoir.colÉtÉvalué)
+        # Autres infos
+        texte_nvx = "Niveaux d'acquisition : {}".format(devoir.get_niveauxAcquisition())
+        builder.get_object("fenêtreÉvaluationDevoirLabelNvxComp").set_text(texte_nvx)
+        # Mise en place du modèle
+        self.changeÉtudiant(self.sélecteurÉtudiant)
+        rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
+        builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
+        # Mise en place éventuelle de suppléments
+
+        # Connection des signaux
+        builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée)
+        builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant").connect("changed", self.changeÉtudiant)
+        builder.get_object("fenêtreÉvaluationDevoirBoutonAppliquer").connect("clicked", self.sauvegarderÉvaluation)
+        self.switchPrésence.connect("state_set", self.switchPrésenceÉtudiant)
         # Lancement
         self.fenêtre.show_all()
         réponse = self.fenêtre.run()
         self.fenêtre.hide()
 
+    def évaluationÉditée(self, cellule, path, text):
+        """
+        Callback pour la mise à jour du modèle quand une case est éditée.
+        """
+        try:
+            val = int(text)
+            if val < self.devoir_save.get_niveauxAcquisition() and val > -2:
+                self.modèle[path][FenêtreÉvaluationDevoir.colÉval] = val
+        except ValueError:  # cas d'un non-entier proposé
+            pass
+
+    def switchPrésenceÉtudiant(self, switch:Gtk.Switch, data:object) -> None:
+        """
+        Callback pour la modification du statut présent ou non de l'étudiant.
+        """
+        self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence] = switch.get_active()
+
+    def changeÉtudiant(self, sélecteur:Gtk.ComboBox) -> None:
+        """
+        Callback pour le changement d'étudiant.
+        """
+        self.sauvegarderÉvaluation()
+        self.étudiantActif = self.sélecteurÉtudiant.get_active()
+        self.modèle.clear()
+        évaluation = self.devoir_save.get_évaluationÉtudiantModèle(self.étudiantActif)
+        self.switchPrésence.set_active(évaluation[1])
+        self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence] = évaluation[1]
+        for row in évaluation[0]:
+            self.modèle.append(row + [True])
+            if len(self.modèle) > 1 and self.modèle[-1][0] == self.modèle[-2][0]:
+                self.modèle[-1][-1] = False
+
+    def sauvegarderÉvaluation(self, data:object=None):
+        """
+        Callback pour sauvegarder l'évaluation de l'étudiant.
+        """
+        liste = [ row[:] for row in self.modèle ]
+        présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
+        self.devoir_save.set_évaluationÉtudiantModèle(self.étudiantActif, liste, présence)
+        uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > 0).any()
+        présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
+        self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtÉvalué] = uneÉval or not présence
 
 ## Classe de la fenêtre principale
 class FenêtrePrincipale(object):
@@ -442,9 +504,7 @@ class FenêtrePrincipale(object):
         """
         filtre = modèle.filter_new()
         filtre.set_visible_func(self.filtreModifiables)
-        dialogue = FenetreDemande(self.fenêtrePrincipale, \
-                                  texte, \
-                                  [("Choix",(filtre,col))])
+        dialogue = FenetreDemande(self.fenêtrePrincipale, texte, [("Choix",(filtre,col))])
         réponse = dialogue.run()
         infos = dialogue.récupèreInfos()
         dialogue.destroy()

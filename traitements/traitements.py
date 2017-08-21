@@ -21,7 +21,7 @@ class Devoir(object):
     - self.typ est une str contenant la catégorie du devoir
     - self.num est un int contenant le numéro du devoir
     - self.date est une str contenant la date du devoir
-    - self.étudiants est un np.ndarray((str,str,bool)) contenant les paires (nom,prénom,présent) des étudiants
+    - self.étudiants est un np.ndarray(list) contenant les listes [nom,prénom,présent] des étudiants
                      de la classe ; présent contient False si l'étudiant était absent.
     - self.questions est une np.ndarray(str) contenant les noms des questions
     - self.compétences est une np.ndarray(str) contenant les noms des compétences évaluées
@@ -32,7 +32,8 @@ class Devoir(object):
                   ou 3 pour acquis/en cours/non acquis)
     - self.éval est un np.ndarray(int) de dimension 3 dont la ième ligne, jième colonne, kième cote contient
                 l'évaluation de la compétence n°j dans la question n°i par l'étudiant n°k ; elle est limitée
-                en nombre de questions et en nombre de compétences. Elle ne doit pas contenir de case > nvxAcq
+                en nombre de questions et en nombre de compétences. Elle ne doit pas contenir de case > nvxAcq.
+                Une valeur négative signifie que la compétence n'a pas été abordée.
     """
     maxQuestions = 100
     maxCompétences = 100
@@ -49,13 +50,13 @@ class Devoir(object):
         self.typ = typ
         self.num = num
         self.date = date
-        self.étudiants = [ (a[0],a[1],True) for a in étudiants ]
+        self.étudiants = [ [a[0],a[1],True] for a in étudiants ]
         self.étudiants.sort(key=lambda a: a[0])
         self.questions = np.array([""]*Devoir.maxQuestions,dtype=object)
         self.compétences = np.array([""]*Devoir.maxCompétences,dtype=object)
         self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
         self.nvxAcq = nvxAcq
-        self.éval = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences,len(self.étudiants)),dtype=int)
+        self.éval = -np.ones(shape=(Devoir.maxQuestions,Devoir.maxCompétences,len(self.étudiants)),dtype=int)
 
     def copie(self):
         """
@@ -91,6 +92,12 @@ class Devoir(object):
         Fonction renvoyant la str "devoir {type} {num} de la classe {classe} - {date}
         """
         return("devoir {} {} de la classe {} - {}".format(self.typ,self.num,self.classe,self.date))
+
+    def get_niveauxAcquisition(self) -> int:
+        """
+        Getter simple pour les niveaux d'acquisition.
+        """
+        return(self.nvxAcq)
 
     def get_listeÉtudiantsModèle(self) -> list:
         """
@@ -143,6 +150,42 @@ class Devoir(object):
                     self.compétences[self.actuelNombreCompétences()] = comp
                 j = np.where(self.compétences == comp)[0]
                 self.coeff[i,j] = coefs[k]
+
+    def get_évaluationÉtudiantModèle(self, numÉtudiant:int) -> (list,bool):
+        """
+        Renvoie une paire contenant une liste de listes comprenant :
+
+        - le nom de la question
+        - le nom de la compétence évalué
+        - le coefficient de la compétence
+        - le niveau de l'étudiant numÉtudiant dans cette évaluation
+
+        puis un bool pour la présence de l'étudiant.
+        """
+        présence = self.étudiants[numÉtudiant][2]
+        liste = []
+        for i,nomQ in enumerate(self.questions[self.questions != ""]):
+            for j,nomC in [(j,a) for (j,a) in enumerate(self.compétences) if self.coeff[i,j] != 0]:
+                tmpListe = [nomQ,nomC,self.coeff[i,j],self.éval[i,j,numÉtudiant]]
+                liste.append(tmpListe)
+        return((liste,présence))
+
+    def set_évaluationÉtudiantModèle(self, numÉtudiant:int, évals:list, présent:bool=True) -> None:
+        """
+        Fixe l'évaluation de l'étudiant numÉtudiant à partir d'une liste de liste comprenant :
+
+        - le nom de la question
+        - le nom de la compétence évalué
+        - le coefficient de la compétence
+        - le niveau de l'étudiant numÉtudiant dans cette évaluation.
+
+        Le bool fixe la présence de l'étudiant.
+        """
+        self.étudiants[numÉtudiant][2] = présent
+        for comp in évals:
+            i = np.where(self.questions == comp[0])[0]
+            j = np.where(self.compétences == comp[1])[0]
+            self.éval[i,j,numÉtudiant] = comp[3]
 
     def test_créerQuestionsDevoir(self):
         """

@@ -46,6 +46,7 @@ data_devoir = [["MPSI","DS",1,"20.09.2017"],
                ["PSI","DS",1,"20.11.2017"]]
 
 ## imports
+import os
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
@@ -395,6 +396,7 @@ class FenêtreÉvaluationDevoir(object):
         self.fenêtre.show_all()
         réponse = self.fenêtre.run()
         self.fenêtre.hide()
+
 
 ## Classe de la fenêtre principale
 class FenêtrePrincipale(object):
@@ -833,7 +835,8 @@ class FenêtrePrincipale(object):
         Constructeur
         """
         # Chargement du glade
-        self.gladefile = 'interface.glade'
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        self.gladefile = dir_path + "/interface.glade"
         self.builder = Gtk.Builder()
         self.builder.add_from_file(self.gladefile)
         self.builder.connect_signals(self)

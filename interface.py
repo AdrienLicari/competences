@@ -392,7 +392,7 @@ class FenêtreÉvaluationDevoir(object):
         # Sélection des étudiants
         self.modèleÉtudiants = Gtk.ListStore(int,str,bool,bool)
         for ét in devoir.get_listeÉtudiantsModèle():
-            self.modèleÉtudiants.append(ét + [False])
+            self.modèleÉtudiants.append(ét)
         self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
         renderer_étudiant = Gtk.CellRendererText()
         renderer_étudiant.set_property("foreground","grey")
@@ -460,7 +460,7 @@ class FenêtreÉvaluationDevoir(object):
         liste = [ row[:] for row in self.modèle ]
         présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
         self.devoir_save.set_évaluationÉtudiantModèle(self.étudiantActif, liste, présence)
-        uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > 0).any()
+        uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > -1).any()
         présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
         self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtÉvalué] = uneÉval or not présence
 
@@ -698,7 +698,8 @@ class FenêtrePrincipale(object):
             étudiants = [(a[1],a[2]) for a in data_étudiants if a[0] == dv[0]]
             self.modèleDevoir.append(dv)
             self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],2,étudiants))
-        self.devoirs[0].test_créerQuestionsDevoir()
+        self.devoirs[0].test_créerQuestionsDevoir(True)
+        self.devoirs[1].test_créerQuestionsDevoir()
 
     def créerNouveauDevoirType(self,dummy):
         """

@@ -101,11 +101,12 @@ class Devoir(object):
 
     def get_listeÉtudiantsModèle(self) -> list:
         """
-        Propose la liste des étudiants pour sélection, sous la forme [[id,nomPrénom,présent],...]
+        Propose la liste des étudiants pour sélection, sous la forme [[id,nomPrénom,présent,évalué],...]
         """
         liste = [0]*len(self.étudiants)
         for k,ét in enumerate(self.étudiants):
-            liste[k] = [k, ét[1]+" "+ét[0], ét[2]]
+            évalué = (self.éval[:,:,k] > -1).any() or not ét[2]
+            liste[k] = [k, ét[1]+" "+ét[0], ét[2], évalué]
         return(liste)
 
     def get_listeQuestionsModèle(self, nombreCompétencesMax:int) -> list:

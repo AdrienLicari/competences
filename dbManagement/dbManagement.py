@@ -51,7 +51,7 @@ class BaseDeDonnées(object):
                              "foreign key(classeId) references classes(id));"
         str_tableDevoirs = "CREATE TABLE devoir " + \
                            "(id integer primary key autoincrement, classeId int, " + \
-                           "typeId int, numero int, date text, " + \
+                           "typeId int, numero int, date text, nvxAcq int," + \
                            "foreign key(typeId) references devoirType(id), " + \
                            "foreign key(classeId) references classes(id));"
         str_tableQuestions = "CREATE TABLE questions " + \
@@ -62,6 +62,12 @@ class BaseDeDonnées(object):
                                         "competenceId int, " + \
                                         "foreign key(questionsId) references questions(id), " + \
                                         "foreign key(competenceId) references competence(id));"
+        str_tableModificateursDevoir = "CREATE TABLE modificateursDevoir " + \
+                                       "(id integer primary key autoincrement, devoirId int, " + \
+                                       "typesModificateursÉvaluationId int, valeur float, nom text," + \
+                                       "foreign key(devoirId) references devoir(id), " + \
+                                       "foreign key(typesModificateursÉvaluationId) references " + \
+                                       "typesModificateursÉvaluation(id));"
         # lancement des requêtes
         c.execute(str_tablesimple('competenceType'))
         c.execute(str_tablesimple('competenceChapitre'))
@@ -72,6 +78,8 @@ class BaseDeDonnées(object):
         c.execute(str_tableDevoirs)
         c.execute(str_tableQuestions)
         c.execute(str_tableQuestionsCompétences)
+        c.execute(str_tablesimple("typesModificateursÉvaluation"))
+        c.execute(str_tableModificateursDevoir)
 
     def ajouteDansTable(self, table:str, vals:dict) -> None:
         """
@@ -105,12 +113,20 @@ class BaseDeDonnées(object):
         c.execute(str_requete)
         self.conn.commit()
 
-    def retraitDeTable(self, table:str, condition:tuple) -> None:
+    def retraitDeTable(self, table:str, conditions:dict) -> None:
         """
-        Retire des lignes dans une table. La condition SQL est une paire clé-valeur utilisée pour le retrait.
+        Retire des lignes dans une table. La condition SQL est un dictionnaire contenant les paires
+        clé-valeur utilisées pour choisir le retrait.
         """
         c = self.conn.cursor()
-        c.execute("delete from {} where {} like '{}';".format(table,condition[0],condition[1]))
+        str_retrait = "delete from {} where ".format(table)
+        for key,val in conditions.items():
+            if type(val) == str and "select" not in val:
+                str_retrait += "{} like '{}' and ".format(key,val)
+            else:
+                str_retrait += "{} = {} and ".format(key,val)
+        str_retrait = str_retrait[:-4] + ";"
+        c.execute(str_retrait)
         self.conn.commit()
 
     def récupèreChamps(self, table:str, champs:list, orderby:str = None) -> list:
@@ -128,12 +144,27 @@ class BaseDeDonnées(object):
         a = [ t[0] for t in c.fetchall() ]
         return(a)
 
+    def récupèreId(self, table:str, conditions:dict) -> int:
+        """
+        Renvoie l'id et le nom d'une entrée identifiée par un ensemble de conditions.
+        """
+        c = self.conn.cursor()
+        str_récup = "select id from {} where ".format(table)
+        for key,val in conditions.items():
+            if type(val) == int:
+                str_récup += "{} = {} and ".format(key,val)
+            elif type(val) == str:
+                str_récup += "{} like '{}' and ".format(key,val)
+        str_récup = str_récup[:-4] + ";"
+        c.execute(str_récup)
+        return(c.fetchall()[0][0])
+
     # Une série de fonctions courtes pour les cas courants
     def ajoutCompétenceType(self, nom:str) -> None:
         self.ajouteDansTable('competenceType',{'nom':nom})
 
     def retraitCompétenceType(self, nom:str) -> None:
-        self.retraitDeTable('competenceType',('nom',nom))
+        self.retraitDeTable('competenceType',{'nom':nom})
 
     def récupèreCompétenceTypes(self) -> list:
         return(self.récupèreChamps('competenceType',['nom']))
@@ -142,7 +173,7 @@ class BaseDeDonnées(object):
         self.ajouteDansTable('competenceChapitre',{'nom':nom})
 
     def retraitCompétenceChapitre(self, nom:str) -> None:
-        self.retraitDeTable('competenceChapitre',('nom',nom))
+        self.retraitDeTable('competenceChapitre',{'nom':nom})
 
     def récupèreCompétenceChapitres(self) -> list:
         return(self.récupèreChamps('competenceChapitre',['nom']))
@@ -153,7 +184,7 @@ class BaseDeDonnées(object):
         self.ajouteDansTable('competence', vals)
 
     def retraitCompétence(self, nom:str) -> None:
-        self.retraitDeTable('competence',('nom',nom))
+        self.retraitDeTable('competence',{'nom':nom})
 
     def récupèreCompétencesListe(self) -> list:
         """
@@ -178,7 +209,7 @@ class BaseDeDonnées(object):
         self.ajouteDansTable('classes',{'nom':nom})
 
     def retraitClasse(self, nom:str) -> None:
-        self.retraitDeTable('classes',('nom',nom))
+        self.retraitDeTable('classes',{'nom':nom})
 
     def récupèreClasses(self) -> list:
         return(self.récupèreChamps('classes',['nom']))
@@ -194,8 +225,8 @@ class BaseDeDonnées(object):
         for nom,prenom in liste:
             self.ajoutÉtudiant(nom,prenom,nomClasse)
 
-    def retraitÉtudiant(self, nom:str) -> None:
-        self.retraitDeTable('etudiants',('nom',nom))
+    def retraitÉtudiant(self, nom:str, prénom:str) -> None:
+        self.retraitDeTable('etudiants',{'nom':nom, 'prenom':prénom})
 
     def récupèreÉtudiants(self, classe:str) -> list:
         """ Fonction qui récupère l'ensemble des étudiants d'une classe """
@@ -204,27 +235,37 @@ class BaseDeDonnées(object):
                   "join classes on classeId = classes.id " + \
                   "where classes.nom like '{}' order by etudiants.nom;".format(classe)
         c.execute(sql_str)
-        a = [ "{} {}".format([1],t[0]) for t in c.fetchall() ]
+        a = [ "{} {}".format(t[1],t[0]) for t in c.fetchall() ]
         return(a)
 
     def ajoutTypeDevoir(self, nom:str) -> None:
         self.ajouteDansTable('devoirType',{'nom':nom})
 
+    def retraitTypeDevoir(self, nom:str) -> None:
+        self.retraitDeTable('devoirType',{'nom':nom})
+
     def récupèreTypesDevoirs(self) -> list:
         return(self.récupèreChamps('devoirType',['nom']))
 
-    def ajoutDevoir(self, typ:str, numero:int, date:str, classe:str) -> None:
-        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, \
+    def ajoutDevoir(self, typ:str, numero:int, date:str, classe:str, niveauxAcquisition:int=2) -> None:
+        """
+        Noter que la valeur par défaut des niveaux d'acquisition testés est 2 (acquis / non acquis)
+        """
+        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, 'nvxAcq':niveauxAcquisition, \
                                        'typeId':('devoirType','nom',typ), 'classeId':('classes','nom',classe)})
+
+    def retraitDevoir(self, idDevoir:int) -> None:
+        self.retraitDeTable('devoir',{'id':idDevoir})
 
     def récupèreDevoirs(self) -> list:
         """ Fonction qui récupère l'ensemble des devoirs """
         c = self.conn.cursor()
-        sql_str = "select devoir.numero,devoirType.nom,classes.nom,devoir.date from devoir " + \
-                  "join classes on classeId = classes.id join devoirType on classeId = classes.id " + \
+        sql_str = "select devoir.id,classes.nom,devoirType.nom,devoir.numero,devoir.date,devoir.nvxAcq " + \
+                  "from devoir join classes on classeId = classes.id " + \
+                  "join devoirType on typeId = devoirType.id " + \
                   "order by devoir.date;"
         c.execute(sql_str)
-        a = [ list(t)[1:] for t in c.fetchall() ]
+        a = [ list(t)[:] for t in c.fetchall() ]
         return(a)
 
     def créerQuestions(self, devoir:int, liste:list) -> None:
@@ -240,6 +281,16 @@ class BaseDeDonnées(object):
             for comp in q[2]:
                 self.ajouteDansTable("questionsCompetences",{"questionsId":q_id,"competenceId":comp})
 
+    def retraitQuestion(self, devoir:int, nomQuestion:str) -> None:
+        """
+        Cette fonction commence par vider toutes les lignes de questionsCompetences associées à la question.
+        """
+        c = self.conn.cursor()
+        c.execute("select id from questions where nom like '{}';".format(nomQuestion))
+        i = [ a for a in c.fetchall() ][0][0]
+        self.retraitDeTable('questionsCompetences', {'questionsId':i})
+        self.retraitDeTable('questions',{'devoirId':devoir,'nom':nomQuestion})
+
     def récupérerQuestions(self, devoir:int) -> list:
         """
         Prend en paramètre un id de devoir et renvoie la liste des questions, coefficients et compétences associées
@@ -251,6 +302,35 @@ class BaseDeDonnées(object):
             c.execute("select competenceId from questionsCompetences where questionsId = {};".format(a[0]))
             a.append([t[0] for t in c.fetchall()])
         return(l)
+
+    def ajoutTypeModificateur(self, nom:str) -> None:
+        self.ajouteDansTable("typesModificateursÉvaluation", {"nom":nom})
+
+    def retraitTypeModificateur(self, nom:str) -> None:
+        self.retraitDeTable("typesModificateursÉvaluation",{"nom":nom})
+
+    def récupèreTypesModificateur(self) -> list:
+        return(self.récupèreChamps("typesModificateursÉvaluation",["nom"]))
+
+    def ajoutModificateur(self, typ:str, devoir:int, nom:str, valeur:float) -> None:
+        """ Le devoir est identifié par son id """
+        vals = {"nom":nom, "typesModificateursÉvaluationId":("typesModificateursÉvaluation","nom",typ), \
+                "devoirId":devoir, "valeur":valeur}
+        self.ajouteDansTable("modificateursDevoir", vals)
+
+    def retraitModificateur(self, nom:str, devoir:int) -> None:
+        conds = {"nom":nom, "devoirId":devoir}
+        self.retraitDeTable("modificateursDevoir", conds)
+
+    def récupèreModificateurs(self, devoir:int) -> list:
+        c = self.conn.cursor()
+        str_sql = "select typesModificateursÉvaluation.nom, modificateursDevoir.nom, modificateursDevoir.valeur " + \
+                  "from typesModificateursÉvaluation join modificateursDevoir " + \
+                  "on typesModificateursÉvaluation.id = modificateursDevoir.typesModificateursÉvaluationId " + \
+                  "where modificateursDevoir.devoirId = {};".format(devoir)
+        c.execute(str_sql)
+        liste = [ {'type':a[0], 'nom':a[1], 'valeur':a[2]} for a in c.fetchall() ]
+        return(liste)
 
 
 ## Partie main pour tests
@@ -299,7 +379,7 @@ if __name__ == '__main__':
     for tab in a:
         c.execute("pragma table_info({})".format(tab))
         cols = c.fetchall()
-        afficherRetour("Liste complète de la table {} :".format(tab))
+        afficherRetour("Détail des champs de la table {} :".format(tab))
         [afficherLigne("{}".format(col)) for col in cols]
 
     # Test de gestion de la table des types de compétences
@@ -370,7 +450,7 @@ if __name__ == '__main__':
     afficherAction("Peuplement de la MPSI... Récupération des classes :")
     afficherRetour(bdd.récupèreÉtudiants("MPSI"))
     bdd.ajoutÉtudiant("Bazin","Jérémy","MPSI")
-    bdd.retraitÉtudiant("Gourgues")
+    bdd.retraitÉtudiant("Gourgues", "Maxime")
     afficherAction("Modification de la MPSI... Récupération des classes :")
     afficherRetour(bdd.récupèreÉtudiants("MPSI"))
 
@@ -378,17 +458,41 @@ if __name__ == '__main__':
     afficherSection("Test de l'interface avec les devoirs")
     bdd.ajoutTypeDevoir('DS')
     bdd.ajoutTypeDevoir('Interro')
+    bdd.ajoutTypeDevoir('DM')
     afficherAction("Peuplement des types de devoirs... Récupération des types :")
     afficherRetour(bdd.récupèreTypesDevoirs())
+    bdd.retraitTypeDevoir('DM')
+    afficherAction("Retrait du type de devoirs 'DM'... Récupération des types :")
+    afficherRetour(bdd.récupèreTypesDevoirs())
     bdd.ajoutDevoir("DS",1,"20.09.2017","MPSI")
-    bdd.ajoutDevoir("DS",2,"20.10.2017","MPSI")
+    bdd.ajoutDevoir("DS",2,"20.10.2017","MPSI",3)
     bdd.ajoutDevoir("Interro",1,"15.09.2017","MPSI")
     afficherAction("Peuplement des devoirs... Récupération des devoirs :")
+    [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
+    bdd.retraitDevoir(2)
+    afficherAction("Retrait du devoirs n°2... Récupération des devoirs :")
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
     questions = [('1.a',2,[1,3]),('1.b',1,[1,4]),('2',2,[1])]
     bdd.créerQuestions(1,questions)
     afficherAction("Peuplement des questions du devoir 1... Récupération des questions :")
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
+    bdd.retraitQuestion(1,'1.b')
+    afficherAction("Retrait de la question 1.b du devoir 1... Récupération des questions :")
+    [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
+    bdd.ajoutTypeModificateur('pointsFixes')
+    bdd.ajoutTypeModificateur('bonusMalus')
+    afficherAction("Peuplement des types de modificateurs... Récupération des types :")
+    afficherRetour(bdd.récupèreTypesModificateur())
+    bdd.retraitTypeModificateur("bonusMalus")
+    afficherAction("Retrait du type 'bonusMalus'... Récupération des types :")
+    afficherRetour(bdd.récupèreTypesModificateur())
+    bdd.ajoutModificateur('pointsFixes',1,'Présentation',2)
+    bdd.ajoutModificateur('pointsFixes',1,'Homogénéité',3)
+    afficherAction("Création d'un modificateur... Récupération des modificateurs du devoir 1 :")
+    [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
+    bdd.retraitModificateur('Présentation',1)
+    afficherAction("Retrait du modificateur 'Présentation'... Récupération des modificateurs du devoir 1 :")
+    [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
 
     afficherSéparateur()
     bdd.fermerDB()

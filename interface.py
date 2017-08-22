@@ -247,7 +247,7 @@ class FenetreDemande(Gtk.Dialog):
 class FenêtreQuestionsDevoir(object):
     """
     Classe gérant la construction d'une fenêtre popup pour la définition des questions /
-        compétences associées à un devoir.
+    compétences associées à un devoir.
 
     Doit reçevoir un objet Devoir en paramètre.
 

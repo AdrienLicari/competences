@@ -9,6 +9,7 @@ Les fonctions fournies par ce module sont adaptées aux besoins du code généra
 import sqlite3 as s
 
 
+## Classe gestionnaire de la base de données.
 class BaseDeDonnées(object):
     """
     Classe gérant la base de données.

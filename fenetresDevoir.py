@@ -204,6 +204,14 @@ class FenêtreÉvaluationDevoir(object):
         self.vue = builder.get_object("fenêtreÉvaluationDevoirTreeView")
         self.sélecteurÉtudiant = builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant")
         self.switchPrésence = builder.get_object("fenêtreÉvaluationDevoirSwitchPrésence")
+        self.modèlePointsFixes = builder.get_object("fenêtreÉvaluationDevoirModèlePointsFixes")
+        self.modèleModificateurs = builder.get_object("fenêtreÉvaluationDevoirModèleModificateurs")
+        self.vuePointsFixes = {'label':builder.get_object("fenêtreÉvaluationDevoirLabelPointsFixes"),
+                               'tv':builder.get_object("fenêtreÉvaluationDevoirTreeViewPointsFixes"),
+                               'rd':builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes")}
+        self.vueModificateurs = {'label':builder.get_object("fenêtreÉvaluationDevoirLabelModifs"),
+                               'tv':builder.get_object("fenêtreÉvaluationDevoirTreeviewModifs"),
+                               'rd':builder.get_object("fenêtreÉvaluationDevoirRdModifs")}
         self.fenêtre.set_title("Évaluation du " + devoir.get_enTêteDevoir())
         # Préparation des attributs autres
         self.devoir_save = devoir
@@ -222,32 +230,56 @@ class FenêtreÉvaluationDevoir(object):
         # Autres infos
         texte_nvx = "Niveaux d'acquisition : {}".format(devoir.get_niveauxAcquisition())
         builder.get_object("fenêtreÉvaluationDevoirLabelNvxComp").set_text(texte_nvx)
+        builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneÉval").\
+            set_title("Éval (/{})".format(devoir.get_niveauxAcquisition()-1))
+        col = builder.get_object("fenêtreÉvaluationDevoirColModifsVal")
+        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirColModifsValRd"), \
+                               lambda col, cell, model, iter, unused:
+                               cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
+        col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes")
+        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes"), \
+                               lambda col, cell, model, iter, unused:
+                               cell.set_property("text", "{:.2f}".format(model.get(iter, 2)[0])))
+        col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes1")
+        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes1"), \
+                               lambda col, cell, model, iter, unused:
+                               cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
         # Mise en place du modèle
         self.changeÉtudiant(self.sélecteurÉtudiant)
         rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
         builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
-        # Mise en place éventuelle de suppléments
-
         # Connection des signaux
-        builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée)
+        builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée, \
+                                                                         (self.modèle,int))
         builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant").connect("changed", self.changeÉtudiant)
         builder.get_object("fenêtreÉvaluationDevoirBoutonAppliquer").connect("clicked", self.sauvegarderÉvaluation)
+        builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée,
+                                                                         (self.modèle,int))
         self.switchPrésence.connect("state_set", self.switchPrésenceÉtudiant)
+        builder.get_object("fenêtreÉvaluationDevoirColModifsÉval").connect("edited",self.évaluationÉditée, \
+                                                                           (self.modèleModificateurs,int))
+        builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes").connect("edited",self.évaluationÉditée, \
+                                                                           (self.modèlePointsFixes,float))
         # Lancement
-        self.fenêtre.show_all()
+        self.fenêtre.show()
         réponse = self.fenêtre.run()
         if réponse == Gtk.ResponseType.OK:
             self.sauvegarderÉvaluation(None)
         self.fenêtre.hide()
 
-    def évaluationÉditée(self, cellule, path, text):
+    def évaluationÉditée(self, cellule, path, text, data):
         """
         Callback pour la mise à jour du modèle quand une case est éditée.
         """
+        modèle,typ = data
         try:
-            val = int(text)
-            if val < self.devoir_save.get_niveauxAcquisition() and val > -2:
-                self.modèle[path][FenêtreÉvaluationDevoir.colÉval] = val
+            val = typ(text)
+            if modèle == self.modèle and val < self.devoir_save.get_niveauxAcquisition() and val > -2:
+                modèle[path][FenêtreÉvaluationDevoir.colÉval] = val
+            elif modèle == self.modèlePointsFixes and val <= modèle[path][1]:
+                modèle[path][2] = val
+            elif modèle == self.modèleModificateurs:
+                modèle[path][2] = val
         except ValueError:  # cas d'un non-entier proposé
             pass
 
@@ -264,19 +296,40 @@ class FenêtreÉvaluationDevoir(object):
         self.sauvegarderÉvaluation()
         self.étudiantActif = self.sélecteurÉtudiant.get_active()
         self.modèle.clear()
+        self.modèlePointsFixes.clear()
+        self.modèleModificateurs.clear()
         évaluation = self.devoir_save.get_évaluationÉtudiantModèle(self.étudiantActif)
         self.switchPrésence.set_active(évaluation[1])
         self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence] = évaluation[1]
         for row in évaluation[0]:
-            self.modèle.append(row + [True])
-            if len(self.modèle) > 1 and self.modèle[-1][0] == self.modèle[-2][0]:
-                self.modèle[-1][-1] = False
+            if row[0] == "points fixes":
+                self.modèlePointsFixes.append(row[1:])
+            elif row[0] == "pourcentage":
+                self.modèleModificateurs.append(row[1:])
+            else:
+                self.modèle.append(row + [True])
+                if len(self.modèle) > 1 and self.modèle[-1][0] == self.modèle[-2][0]:
+                    self.modèle[-1][-1] = False
+        if len(self.modèlePointsFixes) == 0:
+            self.vuePointsFixes['label'].set_visible(False)
+            self.vuePointsFixes['tv'].set_visible(False)
+        else:
+            self.vuePointsFixes['label'].set_visible(True)
+            self.vuePointsFixes['tv'].set_visible(True)
+        if len(self.modèleModificateurs) == 0:
+            self.vueModificateurs['label'].set_visible(False)
+            self.vueModificateurs['tv'].set_visible(False)
+        else:
+            self.vueModificateurs['label'].set_visible(True)
+            self.vueModificateurs['tv'].set_visible(True)
 
     def sauvegarderÉvaluation(self, data:object=None):
         """
         Callback pour sauvegarder l'évaluation de l'étudiant.
         """
-        liste = [ row[:] for row in self.modèle ]
+        liste = [ ["points fixes"]+row[:] for row in self.modèlePointsFixes ] + \
+                [ ["pourcentage"] +row[:] for row in self.modèleModificateurs] + \
+                [ row[:] for row in self.modèle ]
         présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
         self.devoir_save.set_évaluationÉtudiantModèle(self.étudiantActif, liste, présence)
         uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > -1).any()

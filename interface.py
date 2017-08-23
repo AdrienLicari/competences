@@ -53,7 +53,7 @@ from gi.repository import Gtk
 from autocompletion import *
 from fenetresDevoir import *
 from traitements.traitements import *
-
+from dbManagement.dbManagement import BaseDeDonnées
 
 ## Classe regroupant des créations de fenêtres sans intéraction
 class FenêtresInformation(object):
@@ -650,6 +650,8 @@ class FenêtrePrincipale(object):
         # Chargement du glade
         dir_path = os.path.dirname(os.path.realpath(__file__))
         self.gladefile = dir_path + "/interface.glade"
+        self.dbfile = dir_path + "/dbManagement/competences.db"
+        self.bdd = BaseDeDonnées(self.dbfile)
         self.builder = Gtk.Builder()
         self.builder.add_from_file(self.gladefile)
         self.builder.connect_signals(self)
@@ -681,5 +683,4 @@ class FenêtrePrincipale(object):
 ## Tests
 if __name__ == '__main__':
     f = FenêtrePrincipale()
-
-Gtk.main()
+    Gtk.main()

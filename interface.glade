@@ -16,6 +16,26 @@
       <column type="gboolean"/>
     </columns>
   </object>
+  <object class="GtkListStore" id="fenêtreÉvaluationDevoirModèleModificateurs">
+    <columns>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+      <!-- column-name max -->
+      <column type="gfloat"/>
+      <!-- column-name occurences -->
+      <column type="gint"/>
+    </columns>
+  </object>
+  <object class="GtkListStore" id="fenêtreÉvaluationDevoirModèlePointsFixes">
+    <columns>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+      <!-- column-name max -->
+      <column type="gfloat"/>
+      <!-- column-name note -->
+      <column type="gfloat"/>
+    </columns>
+  </object>
   <object class="GtkListStore" id="modèleClasses">
     <columns>
       <!-- column-name nomClasse -->
@@ -1087,7 +1107,7 @@ Exemples :
       <object class="GtkBox" id="fenêtreÉvaluationDevoirVBox">
         <property name="can_focus">False</property>
         <property name="orientation">vertical</property>
-        <property name="spacing">2</property>
+        <property name="spacing">8</property>
         <child internal-child="action_area">
           <object class="GtkButtonBox">
             <property name="can_focus">False</property>
@@ -1163,7 +1183,7 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="hexpand">True</property>
-            <property name="spacing">4</property>
+            <property name="spacing">6</property>
             <child>
               <object class="GtkLabel">
                 <property name="visible">True</property>
@@ -1229,6 +1249,146 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
             <property name="expand">False</property>
             <property name="fill">True</property>
             <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="fenêtreÉvaluationDevoirLabelPointsFixes">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Évaluations fixes du devoir</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkTreeView" id="fenêtreÉvaluationDevoirTreeViewPointsFixes">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="model">fenêtreÉvaluationDevoirModèlePointsFixes</property>
+            <property name="enable_grid_lines">both</property>
+            <child internal-child="selection">
+              <object class="GtkTreeSelection"/>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn">
+                <property name="title" translatable="yes">Nom</property>
+                <property name="expand">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fenêtreÉvaluationDevoirColPointsFixes1">
+                <property name="title" translatable="yes">Éval</property>
+                <child>
+                  <object class="GtkCellRendererText" id="fenêtreÉvaluationDevoirRdPointsFixes1"/>
+                  <attributes>
+                    <attribute name="text">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fenêtreÉvaluationDevoirColPointsFixes">
+                <property name="title" translatable="yes">Max</property>
+                <child>
+                  <object class="GtkCellRendererText" id="fenêtreÉvaluationDevoirRdPointsFixes">
+                    <property name="editable">True</property>
+                  </object>
+                  <attributes>
+                    <attribute name="text">2</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">3</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel" id="fenêtreÉvaluationDevoirLabelModifs">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Modificateurs</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">5</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkTreeView" id="fenêtreÉvaluationDevoirTreeviewModifs">
+            <property name="visible">True</property>
+            <property name="can_focus">True</property>
+            <property name="model">fenêtreÉvaluationDevoirModèleModificateurs</property>
+            <property name="enable_grid_lines">both</property>
+            <child internal-child="selection">
+              <object class="GtkTreeSelection"/>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn">
+                <property name="title" translatable="yes">Nom</property>
+                <property name="expand">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fenêtreÉvaluationDevoirColModifsVal">
+                <property name="title" translatable="yes">Valeur (%)</property>
+                <child>
+                  <object class="GtkCellRendererText" id="fenêtreÉvaluationDevoirColModifsValRd"/>
+                  <attributes>
+                    <attribute name="text">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn">
+                <property name="title" translatable="yes">Appliqué</property>
+                <child>
+                  <object class="GtkCellRendererText" id="fenêtreÉvaluationDevoirColModifsÉval">
+                    <property name="editable">True</property>
+                  </object>
+                  <attributes>
+                    <attribute name="text">2</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">6</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkLabel">
+            <property name="visible">True</property>
+            <property name="can_focus">False</property>
+            <property name="label" translatable="yes">Questions</property>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">7</property>
           </packing>
         </child>
         <child>
@@ -1300,7 +1460,7 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
-            <property name="position">2</property>
+            <property name="position">8</property>
           </packing>
         </child>
       </object>

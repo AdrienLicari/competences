@@ -39,6 +39,10 @@ class Devoir(object):
         l'évaluation de la compétence n°j dans la question n°i par l'étudiant n°k ; elle est limitée
         en nombre de questions et en nombre de compétences. Elle ne doit pas contenir de case > nvxAcq.
         Une valeur négative signifie que la compétence n'a pas été abordée.
+    - self.évalPointsFixes est un np.ndarray(float) de dimension 2 dont la ième ligne, jième colonne contient
+        l'évaluation de ces points fixes n°i par l'étudiant n°j
+    - self.évalModificateurs est un np.ndarray(float) de dimension 2 dont la ième ligne, jième colonne contient
+        l'évaluation de ces modificateurs n°i par l'étudiant n°j
     """
     maxQuestions = 100
     maxCompétences = 100
@@ -67,6 +71,10 @@ class Devoir(object):
         self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
         self.nvxAcq = nvxAcq
         self.éval = -np.ones(shape=(Devoir.maxQuestions,Devoir.maxCompétences,len(self.étudiants)),dtype=int)
+        self.évalPointsFixes = np.zeros(shape=(len(self.pointsFixes),len(self.étudiants)),dtype=float)
+        for i,pf in enumerate(self.pointsFixes):
+            self.évalPointsFixes[i,:] = pf[1]
+        self.évalModificateurs = np.zeros(shape=(len(self.modificateurs),len(self.étudiants)),dtype=int)
 
     def copie(self):
         """
@@ -207,15 +215,18 @@ class Devoir(object):
         """
         Renvoie une paire contenant une liste de listes comprenant :
 
-        - le nom de la question
-        - le nom de la compétence évalué
-        - le coefficient de la compétence
+        - le nom de la question / du type de modificateur
+        - le nom de la compétence évalué / du modificateur
+        - le coefficient de la compétence / les points du modificateur
         - le niveau de l'étudiant numÉtudiant dans cette évaluation
 
         puis un bool pour la présence de l'étudiant.
         """
         présence = self.étudiants[numÉtudiant][2]
-        liste = []
+        liste = [ ["points fixes",a[0],a[1],self.évalPointsFixes[i,numÉtudiant]] \
+                  for (i,a) in enumerate(self.pointsFixes) ]
+        liste += [ ["pourcentage",a[0],a[1],self.évalModificateurs[i,numÉtudiant]] \
+                   for (i,a) in enumerate(self.modificateurs) ]
         for i,nomQ in enumerate(self.questions[self.questions != ""]):
             for j,nomC in [(j,a) for (j,a) in enumerate(self.compétences) if self.coeff[i,j] != 0]:
                 tmpListe = [nomQ,nomC,self.coeff[i,j],self.éval[i,j,numÉtudiant]]
@@ -226,18 +237,25 @@ class Devoir(object):
         """
         Fixe l'évaluation de l'étudiant numÉtudiant à partir d'une liste de liste comprenant :
 
-        - le nom de la question
-        - le nom de la compétence évalué
-        - le coefficient de la compétence
-        - le niveau de l'étudiant numÉtudiant dans cette évaluation.
+        - le nom de la question / du type de modificateur
+        - le nom de la compétence évalué / du modificateur
+        - le coefficient de la compétence / les points du modificateur
+        - le niveau de l'étudiant numÉtudiant dans cette évaluation
 
         Le bool fixe la présence de l'étudiant.
         """
         self.étudiants[numÉtudiant][2] = présent
         for comp in évals:
-            i = np.where(self.questions == comp[0])[0]
-            j = np.where(self.compétences == comp[1])[0]
-            self.éval[i,j,numÉtudiant] = comp[3]
+            if comp[0] == "points fixes":
+                i = np.where(np.array([n[0] for n in self.pointsFixes]) == comp[1])
+                self.évalPointsFixes[i,numÉtudiant] = comp[3]
+            elif comp[0] == "pourcentage":
+                i = np.where(np.array([n[0] for n in self.modificateurs]) == comp[1])
+                self.évalModificateurs[i,numÉtudiant] = comp[3]
+            else:
+                i = np.where(self.questions == comp[0])[0]
+                j = np.where(self.compétences == comp[1])[0]
+                self.éval[i,j,numÉtudiant] = comp[3]
 
     # Traitement des données
     def calculerRésultatsParCompétences(self) -> dict:
@@ -318,25 +336,30 @@ class Devoir(object):
                     self.compétences[self.actuelNombreCompétences()] = comp[0]
                 i,j = np.where(self.questions == q[0])[0], np.where(self.compétences == comp[0])[0]
                 self.coeff[i,j] = comp[1]
-        self.étudiants = [["Alp","Selin",True], \
-                          ["Bazin","Jérémy",True], \
-                          ["Morceaux","Jérémy",True], \
-                          ["Dias","Léo",True], \
-                          ["Gourgues","Maxime",False]]
-        self.étudiants.sort(key=lambda a: a[0])
-        self.nvxAcq = 2
-        self.éval = np.array([[[ 1, 1, 1, 1, 1], \
+        if évals:
+            self.étudiants = [["Alp","Selin",True], \
+                              ["Bazin","Jérémy",True], \
+                              ["Morceaux","Jérémy",True], \
+                              ["Dias","Léo",True], \
+                              ["Gourgues","Maxime",False]]
+            self.étudiants.sort(key=lambda a: a[0])
+            self.nvxAcq = 2
+            self.éval = np.array([[[ 1, 1, 1, 1, 1], \
                                [ 1, 1,-1, 0, 0], \
-                               [-1,-1,-1,-1,-1], \
-                               [-1,-1,-1,-1,-1]], \
-                              [[-1,-1,-1,-1,-1], \
-                               [-1,-1,-1,-1,-1], \
-                               [ 1, 1,-1, 1, 0], \
-                               [-1,-1,-1,-1,-1]], \
-                              [[-1,-1,-1,-1,-1], \
-                               [-1,-1,-1,-1,-1], \
-                               [-1,-1,-1,-1,-1], \
-                               [ 0, 1, 0,-1, 1]]],dtype=int)
+                                   [-1,-1,-1,-1,-1], \
+                                   [-1,-1,-1,-1,-1]], \
+                                  [[-1,-1,-1,-1,-1], \
+                                   [-1,-1,-1,-1,-1], \
+                                   [ 1, 1,-1, 1, 0], \
+                                   [-1,-1,-1,-1,-1]], \
+                                  [[-1,-1,-1,-1,-1], \
+                                   [-1,-1,-1,-1,-1], \
+                                   [-1,-1,-1,-1,-1], \
+                                   [ 0, 1, 0,-1, 1]]],dtype=int)
+            self.pointsFixes = [("Présentation",1), ("Correction de la langue",1)]
+            self.modificateurs = [("Homogénéité",-0.15)]
+            self.évalPointsFixes = np.array([[1,1,0.5,0,0.5],[1,1,0,0.5,1]],dtype=float)
+            self.évalModificateurs = np.array([[0,0,0,1,1]],dtype=int)
 
 
 ## Traitements sur un ensemble de devoirs

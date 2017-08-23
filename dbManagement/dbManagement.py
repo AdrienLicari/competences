@@ -55,11 +55,11 @@ class BaseDeDonnées(object):
                            "foreign key(typeId) references devoirType(id), " + \
                            "foreign key(classeId) references classes(id));"
         str_tableQuestions = "CREATE TABLE questions " + \
-                             "(id integer primary key autoincrement, devoirId int, nom text, coefficient int, " + \
+                             "(id integer primary key autoincrement, devoirId int, nom text, " + \
                              "foreign key(devoirId) references devoir(id));"
         str_tableQuestionsCompétences = "CREATE TABLE questionsCompetences " + \
                                         "(id integer primary key autoincrement, questionsId int, " + \
-                                        "competenceId int, " + \
+                                        "competenceId int, coefficient int," + \
                                         "foreign key(questionsId) references questions(id), " + \
                                         "foreign key(competenceId) references competence(id));"
         str_tableModificateursDevoir = "CREATE TABLE modificateursDevoir " + \
@@ -141,7 +141,7 @@ class BaseDeDonnées(object):
         if orderby is not None:
             str_sql = str_sql[:-1] + " order by {};".format(orderby)
         c.execute(str_sql)
-        a = [ t[0] for t in c.fetchall() ]
+        a = [ {b:t for (b,t) in zip(champs,ligne)} for ligne in c.fetchall() ]
         return(a)
 
     def récupèreId(self, table:str, conditions:dict) -> int:
@@ -149,12 +149,12 @@ class BaseDeDonnées(object):
         Renvoie l'id et le nom d'une entrée identifiée par un ensemble de conditions.
         """
         c = self.conn.cursor()
-        str_récup = "select id from {} where ".format(table)
+        str_récup = """select id from {} where """.format(table)
         for key,val in conditions.items():
             if type(val) == int:
                 str_récup += "{} = {} and ".format(key,val)
             elif type(val) == str:
-                str_récup += "{} like '{}' and ".format(key,val)
+                str_récup += """{} like "{}" and """.format(key,val)
         str_récup = str_récup[:-4] + ";"
         c.execute(str_récup)
         return(c.fetchall()[0][0])
@@ -202,7 +202,7 @@ class BaseDeDonnées(object):
                   "from competence join competenceType on competenceTypeId = competenceType.id " + \
                   "join competenceChapitre on competenceChapitreId = competenceChapitre.id;"
         c.execute(sql_str)
-        a = [ list(t) for t in c.fetchall()]
+        a = [ {'nom':t[0],'type':t[1],'chapitre':t[2]} for t in c.fetchall()]
         return(a)
 
     def ajoutClasse(self, nom:str) -> None:
@@ -235,7 +235,7 @@ class BaseDeDonnées(object):
                   "join classes on classeId = classes.id " + \
                   "where classes.nom like '{}' order by etudiants.nom;".format(classe)
         c.execute(sql_str)
-        a = [ "{} {}".format(t[1],t[0]) for t in c.fetchall() ]
+        a = [ {'nom':t[0], 'prenom':t[1]} for t in c.fetchall() ]
         return(a)
 
     def ajoutTypeDevoir(self, nom:str) -> None:
@@ -265,21 +265,22 @@ class BaseDeDonnées(object):
                   "join devoirType on typeId = devoirType.id " + \
                   "order by devoir.date;"
         c.execute(sql_str)
-        a = [ list(t)[:] for t in c.fetchall() ]
+        a = [ {'id':t[0],'classe':t[1],'type':t[2],'numéro':t[3],'date':t[4],'nvxAcq':t[5]} for t in c.fetchall() ]
         return(a)
 
     def créerQuestions(self, devoir:int, liste:list) -> None:
         """
-        Prend en paramètre une liste de tuples (nomDeQuestion,coef,[compétences]).
+        Prend en paramètre une liste de tuples (nomDeQuestion,[(compétence,coeff)]).
         Le devoir est identifié par son numéro id.
         """
         c = self.conn.cursor()
         for q in liste:
-            self.ajouteDansTable("questions",{'nom':q[0],'coefficient':q[1],'devoirId':devoir})
-            c.execute("select id from questions where nom like '{}';".format(q[0]))
-            q_id = c.fetchall()[0][0]
-            for comp in q[2]:
-                self.ajouteDansTable("questionsCompetences",{"questionsId":q_id,"competenceId":comp})
+            self.ajouteDansTable("questions",{'nom':q[0],'devoirId':devoir})
+            q_id = self.récupèreId("questions",{'nom':q[0]})
+            for comp in q[1]:
+                c_id = self.récupèreId("competence",{'nom':comp[0]})
+                self.ajouteDansTable("questionsCompetences", \
+                                     {"questionsId":q_id,"competenceId":c_id,"coefficient":comp[1]})
 
     def retraitQuestion(self, devoir:int, nomQuestion:str) -> None:
         """
@@ -296,11 +297,15 @@ class BaseDeDonnées(object):
         Prend en paramètre un id de devoir et renvoie la liste des questions, coefficients et compétences associées
         """
         c = self.conn.cursor()
-        c.execute("select id,nom,coefficient from questions where devoirId = {};".format(devoir))
-        l = [ list(t) for t in c.fetchall() ]
+        c.execute("select id,nom from questions where devoirId = {};".format(devoir))
+        l = [ {'id':t[0],'nom':t[1],'competences':[]} for t in c.fetchall() ]
         for a in l:
-            c.execute("select competenceId from questionsCompetences where questionsId = {};".format(a[0]))
-            a.append([t[0] for t in c.fetchall()])
+            str_sql = "select competence.nom,questionsCompetences.coefficient from questionsCompetences " + \
+                      "join competence on questionsCompetences.competenceId = competence.id " + \
+                      "where questionsCompetences.questionsId = {};".format(a['id'])
+            c.execute(str_sql)
+            for t  in c.fetchall():
+                a['competences'].append({'nom':t[0],'coefficient':t[1]})
         return(l)
 
     def ajoutTypeModificateur(self, nom:str) -> None:
@@ -393,7 +398,7 @@ if __name__ == '__main__':
     bdd.retraitCompétenceType('technique')
     afficherAction("Retrait de 'technique'... Récupération des types de compétence :")
     afficherRetour(bdd.récupèreCompétenceTypes())
-    [ bdd.retraitCompétenceType(t) for t in bdd.récupèreCompétenceTypes()]
+    [ bdd.retraitCompétenceType(t['nom']) for t in bdd.récupèreCompétenceTypes() ]
     [ bdd.ajoutCompétenceType(compTp) for compTp in tab ]
     afficherAction("Repeuplement correct de la base")
 
@@ -408,7 +413,7 @@ if __name__ == '__main__':
     bdd.retraitCompétenceChapitre('mécanique')
     afficherAction("Retrait de 'mécanique'... Récupération des chapitres existants :")
     afficherRetour(bdd.récupèreCompétenceChapitres())
-    [ bdd.retraitCompétenceChapitre(t) for t in bdd.récupèreCompétenceChapitres() ]
+    [ bdd.retraitCompétenceChapitre(t['nom']) for t in bdd.récupèreCompétenceChapitres() ]
     [ bdd.ajoutCompétenceChapitre(compTp) for compTp in tab ]
     afficherAction("Repeuplement correct de la base")
 
@@ -431,7 +436,7 @@ if __name__ == '__main__':
     except Exception as ex:
         afficherRetour("Exception levée -> ok")
     afficherAction("Récupération des noms de compétences existantes :")
-    afficherRetour(bdd.récupèreCompétencesListe())
+    [ afficherLigne(l) for l in bdd.récupèreCompétencesListe() ]
     afficherAction("Récupération complète des infos de compétences existantes :")
     [ afficherLigne(a) for a in bdd.récupèreCompétencesComplet() ]
 
@@ -448,11 +453,11 @@ if __name__ == '__main__':
     listeDépart = [('Alp','Selin'), ('Gourgues','Maxime'), ('Morceaux','Jérémy')]
     bdd.ajoutListeÉtudiants(listeDépart,'MPSI')
     afficherAction("Peuplement de la MPSI... Récupération des classes :")
-    afficherRetour(bdd.récupèreÉtudiants("MPSI"))
+    [ afficherLigne(l) for l in bdd.récupèreÉtudiants("MPSI") ]
     bdd.ajoutÉtudiant("Bazin","Jérémy","MPSI")
     bdd.retraitÉtudiant("Gourgues", "Maxime")
     afficherAction("Modification de la MPSI... Récupération des classes :")
-    afficherRetour(bdd.récupèreÉtudiants("MPSI"))
+    [ afficherLigne(l) for l in bdd.récupèreÉtudiants("MPSI") ]
 
     # Tables des devoirs
     afficherSection("Test de l'interface avec les devoirs")
@@ -472,7 +477,9 @@ if __name__ == '__main__':
     bdd.retraitDevoir(2)
     afficherAction("Retrait du devoirs n°2... Récupération des devoirs :")
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
-    questions = [('1.a',2,[1,3]),('1.b',1,[1,4]),('2',2,[1])]
+    questions = [('1.a',[("Vérifier l'homogénéité",1),("Interpréter une mouvement par principe d'inertie",2)]), \
+                 ('1.b',[("Vérifier l'homogénéité",1),('Écrire la loi de Newton',2)]), \
+                 ('2',  [('Écrire la loi de Newton',3)])]
     bdd.créerQuestions(1,questions)
     afficherAction("Peuplement des questions du devoir 1... Récupération des questions :")
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]

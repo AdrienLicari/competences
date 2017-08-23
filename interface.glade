@@ -74,6 +74,16 @@
       <column type="gchararray"/>
     </columns>
   </object>
+  <object class="GtkListStore" id="modèleModificateursDevoir">
+    <columns>
+      <!-- column-name type -->
+      <column type="gchararray"/>
+      <!-- column-name nom -->
+      <column type="gchararray"/>
+      <!-- column-name valeur -->
+      <column type="gfloat"/>
+    </columns>
+  </object>
   <object class="GtkListStore" id="modèleÉtudiants">
     <columns>
       <!-- column-name classe -->
@@ -898,7 +908,7 @@
       <object class="GtkBox">
         <property name="can_focus">False</property>
         <property name="orientation">vertical</property>
-        <property name="spacing">2</property>
+        <property name="spacing">3</property>
         <child internal-child="action_area">
           <object class="GtkButtonBox">
             <property name="can_focus">False</property>
@@ -953,32 +963,111 @@
           </packing>
         </child>
         <child>
-          <object class="GtkScrolledWindow">
+          <object class="GtkGrid">
             <property name="visible">True</property>
-            <property name="can_focus">True</property>
+            <property name="can_focus">False</property>
             <property name="hexpand">True</property>
             <property name="vexpand">True</property>
-            <property name="shadow_type">in</property>
+            <property name="row_spacing">4</property>
             <child>
-              <object class="GtkViewport">
+              <object class="GtkScrolledWindow">
                 <property name="visible">True</property>
-                <property name="can_focus">False</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="vexpand">True</property>
+                <property name="shadow_type">in</property>
                 <child>
-                  <object class="GtkTreeView" id="fenêtreQuestionsDevoirAfficheur">
+                  <object class="GtkViewport">
                     <property name="visible">True</property>
-                    <property name="can_focus">True</property>
-                    <child internal-child="selection">
-                      <object class="GtkTreeSelection"/>
+                    <property name="can_focus">False</property>
+                    <child>
+                      <object class="GtkTreeView" id="fenêtreQuestionsDevoirAfficheur">
+                        <property name="visible">True</property>
+                        <property name="can_focus">True</property>
+                        <property name="vexpand">True</property>
+                        <child internal-child="selection">
+                          <object class="GtkTreeSelection"/>
+                        </child>
+                      </object>
                     </child>
                   </object>
                 </child>
               </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">2</property>
+                <property name="width">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkTreeView" id="fenêtreQuestionsDevoirModificateurs">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+                <property name="hexpand">True</property>
+                <property name="model">modèleModificateursDevoir</property>
+                <child internal-child="selection">
+                  <object class="GtkTreeSelection"/>
+                </child>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">1</property>
+                <property name="width">4</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="tooltip_text" translatable="yes">Le nombre de points sur lequel le devoir est noté</property>
+                <property name="label" translatable="yes">Note maximale</property>
+              </object>
+              <packing>
+                <property name="left_attach">0</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can_focus">False</property>
+                <property name="tooltip_text" translatable="yes">Le nombre de niveaux de compétences.
+
+Exemples :
+- 2 pour une évaluation de type acquis / non acquis
+- 3 pour évaluation de type acquis / en cours d'aquisition / non acquis</property>
+                <property name="label" translatable="yes">Niveaux de compétence</property>
+              </object>
+              <packing>
+                <property name="left_attach">2</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="fenêtreQuestionsDevoirSaisieNoteMax">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">1</property>
+                <property name="top_attach">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkEntry" id="fenêtreQuestionsDevoirSaisieNvxComp">
+                <property name="visible">True</property>
+                <property name="can_focus">True</property>
+              </object>
+              <packing>
+                <property name="left_attach">3</property>
+                <property name="top_attach">0</property>
+              </packing>
             </child>
           </object>
           <packing>
             <property name="expand">False</property>
             <property name="fill">True</property>
-            <property name="position">1</property>
+            <property name="position">2</property>
           </packing>
         </child>
       </object>
@@ -1074,6 +1163,7 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
             <property name="visible">True</property>
             <property name="can_focus">False</property>
             <property name="hexpand">True</property>
+            <property name="spacing">4</property>
             <child>
               <object class="GtkLabel">
                 <property name="visible">True</property>
@@ -1126,7 +1216,7 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
               <object class="GtkLabel" id="fenêtreÉvaluationDevoirLabelNvxComp">
                 <property name="visible">True</property>
                 <property name="can_focus">False</property>
-                <property name="label" translatable="yes">label</property>
+                <property name="label" translatable="yes">Niveaux d'acquisition : 2</property>
               </object>
               <packing>
                 <property name="expand">False</property>
@@ -1192,7 +1282,7 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
                   </object>
                 </child>
                 <child>
-                  <object class="GtkTreeViewColumn">
+                  <object class="GtkTreeViewColumn" id="fenêtreÉvaluationDevoirTreeViewColonneÉval">
                     <property name="title" translatable="yes">Éval</property>
                     <child>
                       <object class="GtkCellRendererText" id="fenêtreÉvaluationDevoirÉditeurÉval">

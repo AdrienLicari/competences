@@ -43,8 +43,8 @@ class Devoir(object):
     maxQuestions = 100
     maxCompétences = 100
     # Fonctions d'intéraction avec l'interface
-    def __init__(self, classe:str, typ:str, num:int, date:str, nvxAcq:int, étudiants:list, \
-                 noteMax:int, pointsFixes:list, modificateurs:list) -> 'Devoir':
+    def __init__(self, classe:str, typ:str, num:int, date:str, noteMax:int, nvxAcq:int, étudiants:list, \
+                 pointsFixes:list=[], modificateurs:list=[]) -> 'Devoir':
         """
         Constructeur.
 
@@ -80,10 +80,9 @@ class Devoir(object):
 
     def correspondÀ(self, liste:list) -> bool:
         """
-        Fonction pour tester qu'un devoir correspond à une liste [classe,type,num,date]
+        Fonction pour tester qu'un devoir correspond à une liste [classe,type,num]
         """
-        return(self.classe == liste[0] and self.typ == liste[1] \
-               and self.num == liste[2] and self.date == liste[3])
+        return(self.classe == liste[0] and self.typ == liste[1] and self.num == liste[2])
 
     def actuelNombreQuestions(self) -> int:
         """
@@ -103,11 +102,29 @@ class Devoir(object):
         """
         return("devoir {} {} de la classe {} - {}".format(self.typ,self.num,self.classe,self.date))
 
+    def get_noteMax(self) -> int:
+        """
+        Getter simple pour la note maximale au devoir (typiquement 20)
+        """
+        return(self.noteMax)
+
+    def set_noteMax(self, note:int) -> None:
+        """
+        Setter simple pour la note maximale au devoir (typiquement 20).
+        """
+        self.noteMax = int(note)
+
     def get_niveauxAcquisition(self) -> int:
         """
         Getter simple pour les niveaux d'acquisition.
         """
         return(self.nvxAcq)
+
+    def set_niveauxAcquisition(self, nombre:int) -> None:
+        """
+        Setter simple pour le nombre de niveaux d'acquisition des compétences.
+        """
+        self.nvxAcq = int(nombre)
 
     def get_listeÉtudiantsModèle(self) -> list:
         """
@@ -161,6 +178,30 @@ class Devoir(object):
                     self.compétences[self.actuelNombreCompétences()] = comp
                 j = np.where(self.compétences == comp)[0]
                 self.coeff[i,j] = coefs[k]
+
+    def get_listeCatégoriesModificateurs(self) -> list:
+        """
+        Renvoie la liste des types demodificateurs possibles.
+        Contient : "points fixes", "pourcentage"
+        """
+        return(["points fixes", "pourcentage"])
+
+    def get_listeModificateursModèle(self) -> list:
+        """
+        Getter qui renvoie la liste des modificateurs (points fixes ET bonus/malus) sous
+        forme de liste [(type,nom,valeur)]
+        """
+        liste = [ ("points fixes",a[0],a[1]) for a in self.pointsFixes ] + \
+                [ ("pourcentage", a[0],a[1]) for a in self.modificateurs ]
+        return(liste)
+
+    def set_modificateursDepuisModèle(self, liste:list) -> None:
+        """
+        Prend en paramètre une liste [(type,nom,valeur)] et peuple les listes
+        self.pointsFixes et self.modificateurs en conséquence
+        """
+        self.pointsFixes   = [ (a[1],a[2]) for a in liste if a[0] == "points fixes" ]
+        self.modificateurs = [ (a[1],a[2]) for a in liste if a[0] == "pourcentage" ]
 
     def get_évaluationÉtudiantModèle(self, numÉtudiant:int) -> (list,bool):
         """

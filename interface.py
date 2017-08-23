@@ -263,22 +263,24 @@ class FenêtreQuestionsDevoir(object):
         """
         self.devoir_save = devoir
         self.fenêtre = builder.get_object("fenêtreQuestionsDevoir")
-        self.treeview = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        self.vue = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        self.vueModificateurs = builder.get_object("fenêtreQuestionsDevoirModificateurs")
+        self.modèleModificateurs = builder.get_object("modèleModificateursDevoir")
+        self.modèleCompétence = builder.get_object("modèleCompétence")
+        self.saisieNoteMax = builder.get_object("fenêtreQuestionsDevoirSaisieNoteMax")
+        self.saisieNvxComp = builder.get_object("fenêtreQuestionsDevoirSaisieNvxComp")
         self.fenêtre.set_title("Mise en place des questions du " + devoir.get_enTêteDevoir())
         builder.get_object("fenêtreQuestionsDevoirAppliquer").connect("clicked",self.sauvegarderCompétences)
         # Mise en place du modèle - doit être cohérent avec FenêtreQuestionsDevoir.maxCompétenceParQuestion
         self.modèle = Gtk.ListStore(str, \
                                     str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int,str,int)
-        self.màjModèle()
-        self.modèleCompétence = builder.get_object("modèleCompétence")
-        # Mise en place de vue
-        self.vue = builder.get_object("fenêtreQuestionsDevoirAfficheur")
+        # Mise en place de la vue principale
         while self.vue.get_n_columns() > 0:
             self.vue.remove_column(self.vue.get_column(0))
         self.vue.set_model(self.modèle)
         rdNuméro = Gtk.CellRendererText()
         rdNuméro.set_property("editable",True)
-        rdNuméro.connect("edited", self.celluleÉditée, 0)
+        rdNuméro.connect("edited", self.celluleÉditée, (self.modèle,0,str))
         self.vue.append_column(Gtk.TreeViewColumn("N°",rdNuméro,text=0))
         for i in range(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
             col = Gtk.TreeViewColumn("Compétence {}".format(i+1))
@@ -292,8 +294,8 @@ class FenêtreQuestionsDevoir(object):
             completion.set_match_func(match_anywhere, None)
             rdComp.set_property("editable",True)
             rdCoef.set_property("editable",True)
-            rdComp.connect("edited", self.celluleÉditée, 2*i+1)
-            rdCoef.connect("edited", self.celluleÉditée, 2*i+2)
+            rdComp.connect("edited", self.celluleÉditée, (self.modèle,2*i+1,str))
+            rdCoef.connect("edited", self.celluleÉditée, (self.modèle,2*i+2,int))
             col.pack_start(rdComp,True)
             col.pack_start(rdCoef,False)
             col.add_attribute(rdComp, "text", 2*i+1)
@@ -301,6 +303,44 @@ class FenêtreQuestionsDevoir(object):
             self.vue.append_column(col)
         self.vue.append_column(Gtk.TreeViewColumn("",Gtk.CellRendererText()))
         self.vue.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
+        # Mise en place de la vue des modificateurs
+        while self.vueModificateurs.get_n_columns() > 0:
+            self.vueModificateurs.remove_column(self.vueModificateurs.get_column(0))
+        typesModifs = Gtk.ListStore(str)
+        [ typesModifs.append([typ]) for typ in devoir.get_listeCatégoriesModificateurs() ]
+        col1, col2, col3 = Gtk.TreeViewColumn("Type de modificateur"), \
+                           Gtk.TreeViewColumn("Nom"), Gtk.TreeViewColumn("Valeur")
+        completion = Gtk.EntryCompletion()
+        rdCatMod, rdNomMod, rdValMod = CellRendererAutoComplete(completion), \
+                                       Gtk.CellRendererText(), Gtk.CellRendererText()
+        completion.set_model(typesModifs)
+        completion.pack_start(rdCatMod, True)
+        completion.add_attribute(rdCatMod,"text",0)
+        completion.props.text_column = 0
+        completion.set_match_func(match_anywhere, None)
+        rdCatMod.set_property("editable",True)
+        rdNomMod.set_property("editable",True)
+        rdValMod.set_property("editable",True)
+        rdCatMod.connect("edited", self.celluleÉditée, (self.modèleModificateurs,0,str))
+        rdNomMod.connect("edited", self.celluleÉditée, (self.modèleModificateurs,1,str))
+        rdValMod.connect("edited", self.celluleÉditée, (self.modèleModificateurs,2,float))
+        col1.pack_start(rdCatMod,True)
+        col2.pack_start(rdNomMod,True)
+        col3.pack_start(rdValMod,True)
+        col1.add_attribute(rdCatMod, "text", 0)
+        col2.add_attribute(rdNomMod, "text", 1)
+        col3.add_attribute(rdValMod, "text", 2)
+        col2.set_expand(True)
+        col3.set_cell_data_func(rdValMod, \
+                                lambda col, cell, model, iter, unused:
+                                cell.set_property("text", "{:.2f}".format(model.get(iter, 2)[0])))
+        self.vueModificateurs.append_column(col1)
+        self.vueModificateurs.append_column(col2)
+        self.vueModificateurs.append_column(col3)
+        self.vue.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
+        self.ajouterLigne(self.modèleModificateurs)
+        # Initialisation des données
+        self.màjModèle()
         self.gestionAffichage()
         # Lancement
         self.fenêtre.show_all()
@@ -309,35 +349,41 @@ class FenêtreQuestionsDevoir(object):
             self.sauvegarderCompétences(None)
         self.fenêtre.hide()
 
-    def ajouterLigne(self) -> None:
+    def ajouterLigne(self,modèle) -> None:
         """
         Fonction interne pour ajouter une ligne vide au modèle, servant à créer une nouvelle question.
         """
-        nom = ""
-        cp_coeff = ["",0]*FenêtreQuestionsDevoir.maxCompétenceParQuestion
-        self.modèle.append([nom]+cp_coeff)
+        if modèle == self.modèle:
+            nom = ""
+            cp_coeff = ["",0]*FenêtreQuestionsDevoir.maxCompétenceParQuestion
+            self.modèle.append([nom]+cp_coeff)
+        elif modèle == self.modèleModificateurs:
+            self.modèleModificateurs.append(["","",0])
 
     def màjModèle(self) -> None:
         """
-        Fonction interne pour ajouter une ligne à la grille interne.
-
-        Si question est un tuple (nom_question,[(nom_compétence,coef)]), elle est ajoutée.
-        Si question est None, une ligne vide est ajoutée.
+        Fonction interne qui reset les modèles à partir des données du self.devoir_save
         """
         self.modèle.clear()
         for q in self.devoir_save.get_listeQuestionsModèle(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
             self.modèle.append(q)
-        self.ajouterLigne()
+        self.ajouterLigne(self.modèle)
+        self.modèleModificateurs.clear()
+        for m in self.devoir_save.get_listeModificateursModèle():
+            self.modèleModificateurs.append(m)
+        self.ajouterLigne(self.modèleModificateurs)
+        self.saisieNoteMax.set_text(str(self.devoir_save.get_noteMax()))
+        self.saisieNvxComp.set_text(str(self.devoir_save.get_niveauxAcquisition()))
 
-    def celluleÉditée(self, cellule, path, text, num):
+    def celluleÉditée(self, cellule, path, text, data):
         """
         Callback pour la mise à jour du modèle quand une case est éditée.
         """
-        if num%2 == 0 and num > 0:
-            text = int(text)
-        self.modèle[path][num] = text
-        if int(path) == len(self.modèle)-1:  # gestion de l'ajout de nouvelle ligne
-            self.ajouterLigne()
+        modèle,num,typ = data
+        text = typ(text)
+        modèle[path][num] = text
+        if int(path) == len(modèle)-1:  # gestion de l'ajout de nouvelle ligne
+            self.ajouterLigne(modèle)
         self.gestionAffichage()
 
     def gestionAffichage(self):
@@ -359,6 +405,11 @@ class FenêtreQuestionsDevoir(object):
         listeModèle.pop()  # on enlève la ligne vide
         listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
         self.devoir_save.set_questionsDepuisModèle(listeModèle, listeCompétences)
+        listeModèle = [ ligne[:] for ligne in self.modèleModificateurs ]
+        listeModèle.pop()  # on enlève la ligne vide
+        self.devoir_save.set_modificateursDepuisModèle(listeModèle)
+        self.devoir_save.set_noteMax(self.saisieNoteMax.get_text())
+        self.devoir_save.set_niveauxAcquisition(self.saisieNvxComp.get_text())
         self.màjModèle()
 
 
@@ -697,7 +748,7 @@ class FenêtrePrincipale(object):
         for dv in data_devoir:
             étudiants = [(a[1],a[2]) for a in data_étudiants if a[0] == dv[0]]
             self.modèleDevoir.append(dv)
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],2,étudiants,20,[],[]))
+            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],20,2,étudiants))
         self.devoirs[0].test_créerQuestionsDevoir(True)
         self.devoirs[1].test_créerQuestionsDevoir()
 
@@ -740,28 +791,32 @@ class FenêtrePrincipale(object):
         explication_nvx = "Le nombre de niveaux d'acquisition (pour un simple acquis/non acquis, mettez 2 ; " \
                           "pour acquis/en cours d'acquisition/non acquis, mettez 3 etc..."
         demandes = [("Classe",(filtreC,0)), ("Type",(filtreT,0)), ("Numéro","libre_int"), ("Date","date"), \
-                    (str_niveauxComp,"libre_int"),(str_fich,"fichier")]
-        déf = {str_niveauxComp:2}
+                    ("Note maximale","libre_int"),(str_niveauxComp,"libre_int"),(str_fich,"fichier")]
+        déf = {str_niveauxComp:2, "Note maximale":20}
         infos= {str_niveauxComp:explication_nvx, str_fich:explication_fich}
         dv = self.créationNouvelObjet("Créez un nouveau devoir", demandes, défauts=déf, infobulles=infos)
         if dv is not None:
-            étudiants = [ (a[0],a[1]) for a in self.modèleÉtudiants if a[0] == dv[0] ]
-            self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],dv[4],étudiants))
-            self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
-            if dv[5] != None:
-                fichier = open(dv[5],'r')
-                questions = []
-                try:
-                    for ligne in fichier:
-                        questions.append(ligne[:-1].split(séparateur))
-                        n = len(questions[-1])
-                        for i in [ k for k in range(n) if (k > 0 and k%2 == 0) ]:  # conversion des entiers
-                            questions[-1][i] = int(questions[-1][i])
-                    compétences = listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
-                    self.devoirs[-1].set_questionsDepuisModèle(questions, compétences)
-                except(ValueError):
-                    FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
-                                                        "Un coefficient n'est pas un nombre dans le fichier.")
+            if True not in [ d.correspondÀ(dv[0:3]) for d in self.devoirs ]:
+                étudiants = [ (a[0],a[1]) for a in self.modèleÉtudiants if a[0] == dv[0] ]
+                self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],dv[4],dv[5],étudiants))
+                self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
+                if dv[6] != None:
+                    fichier = open(dv[6],'r')
+                    questions = []
+                    try:
+                        for ligne in fichier:
+                            questions.append(ligne[:-1].split(séparateur))
+                            n = len(questions[-1])
+                            for i in [ k for k in range(n) if (k > 0 and k%2 == 0) ]:  # conversion des entiers
+                                questions[-1][i] = int(questions[-1][i])
+                        compétences = listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
+                        self.devoirs[-1].set_questionsDepuisModèle(questions, compétences)
+                    except(ValueError):
+                        FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
+                                                            "Un coefficient n'est pas un nombre dans le fichier.")
+            else:
+                FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
+                                                    "Ce devoir existe déjà.")
 
     def supprimerDevoir(self,dummy):
         """
@@ -779,7 +834,7 @@ class FenêtrePrincipale(object):
         modèle,it = self.sélectionDepuisAfficheurListe("afficheurDevoirs", \
                                                        "Vous n'avez pas sélectionné de devoir")
         if it is not None:
-            dev = [d for d in self.devoirs if d.correspondÀ(modèle[it])][0]
+            dev = [d for d in self.devoirs if d.correspondÀ(modèle[it][0:3])][0]
             fenêtreQuestions = FenêtreQuestionsDevoir(dev, self.builder)
 
     def évaluerDevoir(self,dummy):

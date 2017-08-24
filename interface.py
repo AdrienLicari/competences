@@ -287,7 +287,8 @@ class FenêtrePrincipale(object):
                 modèle =  modèle.get_model()
             return(modèle, it)
 
-    def suppressionDepuisAfficheurListe(self, afficheur:str, texteConfirmation:'function', msgErr:str) -> None:
+    def suppressionDepuisAfficheurListe(self, afficheur:str, texteConfirmation:'function', msgErr:str,
+                                        dbFonction:'function'=None) -> None:
         """
         Fonction générique utilisée pour supprimer depuis une liste ordonnable et triable.
 
@@ -295,11 +296,14 @@ class FenêtrePrincipale(object):
         - texteConfirmation est une fonction à un paramètre qui construit la chaîne de caractère à partir
           de la ligne récupérée
         - msgErr est utilisée en cas d'absence de sélection de la part de l'utilisateur
+        - dbFunction est une fonction prenant en paramètre modèle et it et qui gère la mise à jour de la db
         """
         modèle, it = self.sélectionDepuisAfficheurListe(afficheur, msgErr)
         if it is not None:
             msg = texteConfirmation(modèle[it])
             if FenêtresInformation.demandeConfirmation(self.fenêtrePrincipale,msg):
+                if dbFonction is not None:
+                    dbFonction(modèle,it)
                 modèle.remove(it)
 
     def créationNouvelObjet(self, label:str, demandes:list, **kwargs) -> list:
@@ -341,6 +345,50 @@ class FenêtrePrincipale(object):
         self.builder.get_object("modèleDevoirFiltré").refilter()
         self.builder.get_object("modèleCompétenceFiltré").refilter()
 
+    def chargerInfosDepuisBDD(self):
+        """
+        Fonction permettant de charger les informations d'une bdd. Commence par vider les informations
+        précédentes.
+        """
+        self.modèleCompétenceType.clear()
+        self.modèleCompétenceType.append(["Toutes"])
+        for elt in self.bdd.récupèreCompétenceTypes():
+            self.modèleCompétenceType.append([elt['nom']])
+        self.builder.get_object("sélecteurCompétenceType").set_active(0)
+        self.modèleCompétenceChapitre.clear()
+        self.modèleCompétenceChapitre.append(["Tous"])
+        for elt in self.bdd.récupèreCompétenceChapitres():
+            self.modèleCompétenceChapitre.append([elt['nom']])
+        self.builder.get_object("sélecteurCompétenceChapitre").set_active(0)
+        self.modèleCompétence.clear()
+        for elt in self.bdd.récupèreCompétencesComplet():
+            self.modèleCompétence.append([elt['nom'],elt['type'],elt['chapitre']])
+        self.modèleClasses.clear()
+        self.modèleClasses.append(["Toutes"])
+        for elt in self.bdd.récupèreClasses():
+            self.modèleClasses.append([elt['nom']])
+        self.builder.get_object("sélecteurClasse").set_active(0)
+        self.modèleÉtudiants.clear()
+        for classe in [ a[0] for a in self.modèleClasses ]:
+            for elt in self.bdd.récupèreÉtudiants(classe):
+                self.modèleÉtudiants.append([classe,elt['nom'],elt['prenom']])
+        self.modèleDevoirType.clear()
+        self.modèleDevoirType.append(["Tous"])
+        for elt in self.bdd.récupèreTypesDevoirs():
+            self.modèleDevoirType.append([elt['nom']])
+        self.builder.get_object("sélecteurDevoirType").set_active(0)
+        compétences = [ a[0] for a in self.modèleCompétence ]
+        for elt in self.bdd.récupèreDevoirs():
+            idDev, cl, typ, num, date, noteMax, nvxAcq = elt['id'], elt['classe'], elt['type'], elt['numéro'], \
+                                                         elt['date'], elt['noteMax'], elt['nvxAcq']
+            self.modèleDevoir.append([cl,typ,num,date])
+            étudiants = [(e['nom'],e['prenom']) for e in self.bdd.récupèreÉtudiants(cl)]
+            self.devoirs.append(Devoir(cl,typ,num,date,noteMax,nvxAcq,étudiants))
+            self.devoirs[-1].set_questionsDepuisModèle(self.bdd.récupérerQuestions(idDev),compétences)
+            self.devoirs[-1].set_modificateursDepuisModèle(self.bdd.récupèreModificateurs(idDev))
+            self.devoirs[-1].set_noteMax(noteMax)
+            self.devoirs[-1].set_niveauxAcquisition(nvxAcq)
+
     # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
         """
@@ -365,6 +413,7 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cette classe existe déjà")
             else:
                 self.modèleClasses.append(liste)
+                self.bdd.ajoutClasse(liste[0])
 
     def supprimerClasse(self,dummy):
         """
@@ -376,6 +425,8 @@ class FenêtrePrincipale(object):
                                             "ainsi que tous les étudiants qui la composent ?")
         if classeSupprimée is not None:
             self.suppressionÉlémentsAssociésÀCatégorie(classeSupprimée, self.modèleÉtudiants, 0)
+            [ self.bdd.retraitÉtudiant(ét['nom'],ét['prenom']) for ét in self.bdd.récupèreÉtudiants(classeSupprimée) ]
+            self.bdd.retraitClasse(classeSupprimée)
 
     def ajouterÉtudiant(self,dummy):
         """
@@ -390,6 +441,7 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cet étudiant existe déjà")
             else:
                 self.modèleÉtudiants.append(liste)
+                self.bdd.ajoutÉtudiant(liste[1], liste[2], liste[0])
 
     def ajouterÉtudiantsDepuisFichier(self,dummy):
         """
@@ -409,6 +461,7 @@ class FenêtrePrincipale(object):
         for ligne in fichier:
             nom,prénom = ligne.split(séparateur)
             self.modèleÉtudiants.append([classe,nom,prénom[:-1]])  # on exclut le '\n' de fin de ligne
+            self.bdd.ajoutÉtudiant(nom, prénom[:-1], classe)
         fichier.close()
 
     def supprimerÉtudiant(self,dummy):
@@ -416,8 +469,9 @@ class FenêtrePrincipale(object):
         Callback utilisé pour la suppression d'un étudiant.
         """
         constructionMsg = lambda a: "Voulez-vous supprimer l'étudiant {} {} ?".format(a[1],a[2])
+        gestionDb = lambda mod,it: self.bdd.retraitÉtudiant(mod[it][1],mod[it][2])
         self.suppressionDepuisAfficheurListe("afficheurÉtudiants", constructionMsg, \
-                                             "Vous n'avez pas sélectionné d'étudiant")
+                                             "Vous n'avez pas sélectionné d'étudiant",gestionDb)
 
     def filtreVisibilitéParClasse(self,model,it,data):
         """
@@ -454,6 +508,7 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce type de devoir existe déjà")
             else:
                 self.modèleDevoirType.append(liste)
+                self.bdd.ajoutTypeDevoir(liste[0])
 
     def supprimerDevoirType(self,dummy):
         """
@@ -465,6 +520,13 @@ class FenêtrePrincipale(object):
                                                     "ainsi que tous les devoirs associés ?")
         if typeSupprimé is not None:
             self.suppressionÉlémentsAssociésÀCatégorie(typeSupprimé, self.modèleDevoir, 1)
+            devoirs = [ a['id'] for a in self.bdd.récupèreDevoirs() if a['type'] == typeSupprimé ]
+            [ self.bdd.retraitDevoir(i) for i in devoirs ]
+            self.bdd.retraitTypeDevoir(typeSupprimé)
+
+    def récupérerIdDevoir(self,dv) -> int:
+        return([ a['id'] for a in self.bdd.récupèreDevoirs() \
+                 if a['classe'] == dv[0] and a['type'] == dv[1] and a['numéro'] == dv[2] ][0])
 
     def créerDevoir(self,dummy):
         """
@@ -492,6 +554,7 @@ class FenêtrePrincipale(object):
                 étudiants = [ (a[0],a[1]) for a in self.modèleÉtudiants if a[0] == dv[0] ]
                 self.devoirs.append(Devoir(dv[0],dv[1],dv[2],dv[3],dv[4],dv[5],étudiants))
                 self.modèleDevoir.append([dv[0],dv[1],dv[2],dv[3]])
+                self.bdd.ajoutDevoir(dv[0],dv[1],dv[2],dv[3],dv[4],dv[5])
                 if dv[6] != None:
                     fichier = open(dv[6],'r')
                     questions = []
@@ -501,8 +564,11 @@ class FenêtrePrincipale(object):
                             n = len(questions[-1])
                             for i in [ k for k in range(n) if (k > 0 and k%2 == 0) ]:  # conversion des entiers
                                 questions[-1][i] = int(questions[-1][i])
+                        qBDD = [ (q[0], [(q[2*i+1],q[2*i+2]) for i in range(len(q)//2)]) for q in questions ]
                         compétences = listeCompétences = [ ligne[0] for ligne in self.modèleCompétence ]
                         self.devoirs[-1].set_questionsDepuisModèle(questions, compétences)
+                        idDev = self.récupérerIdDevoir(dv)
+                        self.bdd.créerQuestions(idDev, qBDD)
                     except(ValueError):
                         FenêtresInformation.affichageErreur(self.fenêtrePrincipale, \
                                                             "Un coefficient n'est pas un nombre dans le fichier.")
@@ -515,8 +581,13 @@ class FenêtrePrincipale(object):
         Callback utilisé pour la suppression d'un devoir.
         """
         constructionMsg = lambda a: "Voulez-vous supprimer le devoir {} {} des {} ?".format(a[1],a[2],a[0])
+        def dbFonction(mod,it):
+            dv = [ a for a in mod[it] ]
+            self.bdd.retraitDevoir(self.récupérerIdDevoir(dv))
+            dev = [ a for a in self.devoirs if a.correspondÀ(mod[it][0:3]) ][0]
+            self.devoirs.remove(dev)
         self.suppressionDepuisAfficheurListe("afficheurDevoirs", constructionMsg, \
-                                             "Vous n'avez pas sélectionné de devoir")
+                                             "Vous n'avez pas sélectionné de devoir", dbFonction)
 
     def modifierQuestionsDevoir(self,dummy):
         """
@@ -527,7 +598,10 @@ class FenêtrePrincipale(object):
                                                        "Vous n'avez pas sélectionné de devoir")
         if it is not None:
             dev = [d for d in self.devoirs if d.correspondÀ(modèle[it][0:3])][0]
-            fenêtreQuestions = FenêtreQuestionsDevoir(dev, self.builder)
+            cl, typ, num = tuple(modèle[it][0:3])
+            idDev = [ a['id'] for a in self.bdd.récupèreDevoirs() if dev.correspondÀ([a['classe'], \
+                                                                                      a['type'],a['numéro']])][0]
+            fenêtreQuestions = FenêtreQuestionsDevoir(dev, self.builder, self.bdd, idDev)
 
     def évaluerDevoir(self,dummy):
         """
@@ -574,6 +648,7 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce type de compétence existe déjà")
             else:
                 self.modèleCompétenceType.append(liste)
+                self.bdd.ajoutCompétenceType(liste[0])
 
     def supprimerTypeCompétence(self,dummy):
         """
@@ -585,6 +660,9 @@ class FenêtrePrincipale(object):
                                                        "ainsi que toutes les compétences associées ?")
         if typeSupprimé is not None:
             self.suppressionÉlémentsAssociésÀCatégorie(typeSupprimé, self.modèleCompétence, 1)
+            [ self.bdd.retraitCompétence(elt['nom']) for elt in self.bdd.récupèreCompétencesComplet() \
+              if elt['type'] == typeSupprimé ]
+            self.bdd.retraitCompétenceType(typeSupprimé)
 
     def créerNouveauChapitre(self,dummy):
         """
@@ -596,6 +674,7 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Ce chapitre existe déjà")
             else:
                 self.modèleCompétenceChapitre.append(liste)
+                self.bdd.ajoutCompétenceChapitre(liste[0])
 
     def supprimerChapitre(self,dummy):
         """
@@ -607,6 +686,9 @@ class FenêtrePrincipale(object):
                                                        "ainsi que toutes les compétences associées ?")
         if chapSupprimé is not None:
             self.suppressionÉlémentsAssociésÀCatégorie(chapSupprimé, self.modèleCompétence, 2)
+            [ self.bdd.retraitCompétence(elt['nom']) for elt in self.bdd.récupèreCompétencesComplet() \
+              if elt['chapitre'] == chapSupprimé ]
+            self.bdd.retraitCompétenceChapitre(chapSupprimé)
 
     def créerCompétence(self,dummy):
         """
@@ -623,14 +705,16 @@ class FenêtrePrincipale(object):
                 FenêtresInformation.affichageErreur(self.fenêtrePrincipale,"Cette compétence existe déjà")
             else:
                 self.modèleCompétence.append(liste)
+                self.bdd.ajoutCompétence(liste[0],liste[2],liste[1])
 
     def supprimerCompétence(self,dummy):
         """
         Callback pour la suppression d'une compétence.
         """
         msgFunc = lambda a: "Voulez-vous supprimer la compétence {} ?".format(a[0])
+        dbFonction = lambda mod,it: self.bdd.retraitCompétence(mod[it][0])
         self.suppressionDepuisAfficheurListe("afficheurCompétences", msgFunc, \
-                                             "Aucune compétence n'est sélectionnée.")
+                                             "Aucune compétence n'est sélectionnée.", dbFonction)
 
     def filtreVisibilitéCompétences(self,model,it,data):
         """
@@ -654,7 +738,6 @@ class FenêtrePrincipale(object):
         self.bdd = BaseDeDonnées(self.dbfile)
         self.builder = Gtk.Builder()
         self.builder.add_from_file(self.gladefile)
-        self.builder.connect_signals(self)
         # Récupération des objets utiles
         self.fenêtrePrincipale = self.builder.get_object("fenêtrePrincipale")
         # Création des objets de l'état : les classes, les étudiants
@@ -673,10 +756,9 @@ class FenêtrePrincipale(object):
         self.builder.get_object("modèleDevoirFiltré").set_visible_func(self.filtreVisibilitéDevoirs)
         self.builder.get_object("modèleCompétenceFiltré").set_visible_func(self.filtreVisibilitéCompétences)
         # Chargement des données
-        self.chargerClasses()
-        self.chargerCompétences()
-        self.chargerDevoirs()
+        self.chargerInfosDepuisBDD()
         # lancement
+        self.builder.connect_signals(self)
         self.fenêtrePrincipale.show()
 
 

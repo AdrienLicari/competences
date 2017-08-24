@@ -39,35 +39,40 @@ class BaseDeDonnées(object):
         """
         c = self.conn.cursor()
         # création des requêtes SQL
-        str_tablesimple = lambda nom: "create table {}".format(nom) + \
+        str_tablesimple = lambda nom: "create table IF NOT EXISTS {}".format(nom) + \
                           "(id integer primary key autoincrement, nom text);"
-        str_tableCompetences = "CREATE TABLE competence" + \
+        str_tableCompetences = "CREATE TABLE IF NOT EXISTS competence" + \
                                "(id integer primary key autoincrement, nom text, " + \
                                "competenceTypeId int, competenceChapitreId int," + \
                                "foreign key(competenceTypeId) references competenceType(id), " + \
                                "foreign key(competenceChapitreId) references competenceChapitre(id));"
-        str_tableÉtudiants = "CREATE TABLE etudiants" + \
+        str_tableÉtudiants = "CREATE TABLE IF NOT EXISTS etudiants" + \
                              "(id integer primary key autoincrement, classeId int, nom text, prenom text, " + \
                              "foreign key(classeId) references classes(id));"
-        str_tableDevoirs = "CREATE TABLE devoir " + \
+        str_tableDevoirs = "CREATE TABLE IF NOT EXISTS devoir " + \
                            "(id integer primary key autoincrement, classeId int, " + \
-                           "typeId int, numero int, date text, nvxAcq int," + \
+                           "typeId int, numero int, date text, noteMax int default 20, nvxAcq int default 2," + \
                            "foreign key(typeId) references devoirType(id), " + \
                            "foreign key(classeId) references classes(id));"
-        str_tableQuestions = "CREATE TABLE questions " + \
+        str_tableQuestions = "CREATE TABLE IF NOT EXISTS questions " + \
                              "(id integer primary key autoincrement, devoirId int, nom text, " + \
                              "foreign key(devoirId) references devoir(id));"
-        str_tableQuestionsCompétences = "CREATE TABLE questionsCompetences " + \
+        str_tableQuestionsCompétences = "CREATE TABLE IF NOT EXISTS questionsCompetences " + \
                                         "(id integer primary key autoincrement, questionsId int, " + \
                                         "competenceId int, coefficient int," + \
                                         "foreign key(questionsId) references questions(id), " + \
                                         "foreign key(competenceId) references competence(id));"
-        str_tableModificateursDevoir = "CREATE TABLE modificateursDevoir " + \
+        str_tableModificateursDevoir = "CREATE TABLE IF NOT EXISTS modificateursDevoir " + \
                                        "(id integer primary key autoincrement, devoirId int, " + \
                                        "typesModificateursÉvaluationId int, valeur float, nom text," + \
                                        "foreign key(devoirId) references devoir(id), " + \
                                        "foreign key(typesModificateursÉvaluationId) references " + \
                                        "typesModificateursÉvaluation(id));"
+        str_tableEtudiantsEvaluationModificateurs = "CREATE TABLE IF NOT EXISTS etudiantsEvaluationModificateurs " + \
+                                       "(id integer primary key autoincrement, etudiantsId int, " + \
+                                       "modificateursDevoirId int, evaluation float," + \
+                                       "foreign key(etudiantsId) references etudiants(id), " + \
+                                       "foreign key(modificateursDevoirId) references modificateursDevoir(id));"
         # lancement des requêtes
         c.execute(str_tablesimple('competenceType'))
         c.execute(str_tablesimple('competenceChapitre'))
@@ -80,6 +85,7 @@ class BaseDeDonnées(object):
         c.execute(str_tableQuestionsCompétences)
         c.execute(str_tablesimple("typesModificateursÉvaluation"))
         c.execute(str_tableModificateursDevoir)
+        c.execute(str_tableEtudiantsEvaluationModificateurs)
 
     def ajouteDansTable(self, table:str, vals:dict) -> None:
         """
@@ -122,7 +128,7 @@ class BaseDeDonnées(object):
         str_retrait = "delete from {} where ".format(table)
         for key,val in conditions.items():
             if type(val) == str and "select" not in val:
-                str_retrait += "{} like '{}' and ".format(key,val)
+                str_retrait += """{} like "{}" and """.format(key,val)
             else:
                 str_retrait += "{} = {} and ".format(key,val)
         str_retrait = str_retrait[:-4] + ";"
@@ -151,13 +157,17 @@ class BaseDeDonnées(object):
         c = self.conn.cursor()
         str_récup = """select id from {} where """.format(table)
         for key,val in conditions.items():
-            if type(val) == int:
+            if type(val) == int or type(val) == float:
                 str_récup += "{} = {} and ".format(key,val)
             elif type(val) == str:
                 str_récup += """{} like "{}" and """.format(key,val)
         str_récup = str_récup[:-4] + ";"
         c.execute(str_récup)
-        return(c.fetchall()[0][0])
+        a = c.fetchall()
+        if len(a) == 0:
+            return(-1)
+        else:
+            return(a[0][0])
 
     # Une série de fonctions courtes pour les cas courants
     def ajoutCompétenceType(self, nom:str) -> None:
@@ -247,26 +257,35 @@ class BaseDeDonnées(object):
     def récupèreTypesDevoirs(self) -> list:
         return(self.récupèreChamps('devoirType',['nom']))
 
-    def ajoutDevoir(self, typ:str, numero:int, date:str, classe:str, niveauxAcquisition:int=2) -> None:
+    def ajoutDevoir(self, classe:str, typ:str, numero:int, date:str, \
+                    noteMax:int=20, niveauxAcquisition:int=2) -> None:
         """
         Noter que la valeur par défaut des niveaux d'acquisition testés est 2 (acquis / non acquis)
         """
-        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, 'nvxAcq':niveauxAcquisition, \
+        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, 'nvxAcq':niveauxAcquisition, 'noteMax':noteMax, \
                                        'typeId':('devoirType','nom',typ), 'classeId':('classes','nom',classe)})
 
     def retraitDevoir(self, idDevoir:int) -> None:
+        [ self.retraitQuestion(idDevoir,a[0]) for a in self.récupérerQuestions(idDevoir) ]
+        [ self.retraitModificateur(idDevoir,a[1]) for a in self.récupèreModificateurs(idDevoir) ]
         self.retraitDeTable('devoir',{'id':idDevoir})
 
     def récupèreDevoirs(self) -> list:
         """ Fonction qui récupère l'ensemble des devoirs """
         c = self.conn.cursor()
-        sql_str = "select devoir.id,classes.nom,devoirType.nom,devoir.numero,devoir.date,devoir.nvxAcq " + \
-                  "from devoir join classes on classeId = classes.id " + \
+        sql_str = "select devoir.id,classes.nom,devoirType.nom,devoir.numero,devoir.date,devoir.nvxAcq," + \
+                  "devoir.noteMax from devoir join classes on classeId = classes.id " + \
                   "join devoirType on typeId = devoirType.id " + \
                   "order by devoir.date;"
         c.execute(sql_str)
-        a = [ {'id':t[0],'classe':t[1],'type':t[2],'numéro':t[3],'date':t[4],'nvxAcq':t[5]} for t in c.fetchall() ]
+        a = [ {'id':t[0],'classe':t[1],'type':t[2],'numéro':t[3],'date':t[4],'nvxAcq':t[5],'noteMax':t[6]} \
+              for t in c.fetchall() ]
         return(a)
+
+    def modifieNoteEtNiveauxDevoir(self, idDevoir:int, noteMax:int, nvxAcq:int) -> None:
+        c = self.conn.cursor()
+        c.execute("update devoir set noteMax = {}, nvxAcq = {} where id = {};".format(noteMax,nvxAcq,idDevoir))
+        self.conn.commit()
 
     def créerQuestions(self, devoir:int, liste:list) -> None:
         """
@@ -279,8 +298,9 @@ class BaseDeDonnées(object):
             q_id = self.récupèreId("questions",{'nom':q[0]})
             for comp in q[1]:
                 c_id = self.récupèreId("competence",{'nom':comp[0]})
-                self.ajouteDansTable("questionsCompetences", \
-                                     {"questionsId":q_id,"competenceId":c_id,"coefficient":comp[1]})
+                if c_id != -1:
+                    self.ajouteDansTable("questionsCompetences", \
+                                         {"questionsId":q_id,"competenceId":c_id,"coefficient":comp[1]})
 
     def retraitQuestion(self, devoir:int, nomQuestion:str) -> None:
         """
@@ -298,14 +318,15 @@ class BaseDeDonnées(object):
         """
         c = self.conn.cursor()
         c.execute("select id,nom from questions where devoirId = {};".format(devoir))
-        l = [ {'id':t[0],'nom':t[1],'competences':[]} for t in c.fetchall() ]
+        l = [ [t[0],t[1]] for t in c.fetchall() ]
         for a in l:
             str_sql = "select competence.nom,questionsCompetences.coefficient from questionsCompetences " + \
                       "join competence on questionsCompetences.competenceId = competence.id " + \
-                      "where questionsCompetences.questionsId = {};".format(a['id'])
+                      "where questionsCompetences.questionsId = {};".format(a[0])
             c.execute(str_sql)
-            for t  in c.fetchall():
-                a['competences'].append({'nom':t[0],'coefficient':t[1]})
+            for t in c.fetchall():
+                a += [t[0],t[1]]
+            a.pop(0)
         return(l)
 
     def ajoutTypeModificateur(self, nom:str) -> None:
@@ -317,13 +338,13 @@ class BaseDeDonnées(object):
     def récupèreTypesModificateur(self) -> list:
         return(self.récupèreChamps("typesModificateursÉvaluation",["nom"]))
 
-    def ajoutModificateur(self, typ:str, devoir:int, nom:str, valeur:float) -> None:
+    def ajoutModificateur(self, devoir:int, typ:str, nom:str, valeur:float) -> None:
         """ Le devoir est identifié par son id """
         vals = {"nom":nom, "typesModificateursÉvaluationId":("typesModificateursÉvaluation","nom",typ), \
                 "devoirId":devoir, "valeur":valeur}
         self.ajouteDansTable("modificateursDevoir", vals)
 
-    def retraitModificateur(self, nom:str, devoir:int) -> None:
+    def retraitModificateur(self, devoir:int, nom:str) -> None:
         conds = {"nom":nom, "devoirId":devoir}
         self.retraitDeTable("modificateursDevoir", conds)
 
@@ -334,7 +355,7 @@ class BaseDeDonnées(object):
                   "on typesModificateursÉvaluation.id = modificateursDevoir.typesModificateursÉvaluationId " + \
                   "where modificateursDevoir.devoirId = {};".format(devoir)
         c.execute(str_sql)
-        liste = [ {'type':a[0], 'nom':a[1], 'valeur':a[2]} for a in c.fetchall() ]
+        liste = [ (a[0],a[1],a[2]) for a in c.fetchall() ]
         return(liste)
 
 
@@ -361,7 +382,7 @@ def afficherLigne(sec:str) -> None:
    """ Fonction utilitaire pour l'affichage des tests """
    print("\t* {}".format(sec))
 
-if __name__ == '__main__':
+def effectuerTests() -> None:
     # test d'ouverture et affichage du schema
     afficherSection("Nettoyage et initialisation de la base de tests")
     nom_db = 'competences_test.db'
@@ -469,9 +490,9 @@ if __name__ == '__main__':
     bdd.retraitTypeDevoir('DM')
     afficherAction("Retrait du type de devoirs 'DM'... Récupération des types :")
     afficherRetour(bdd.récupèreTypesDevoirs())
-    bdd.ajoutDevoir("DS",1,"20.09.2017","MPSI")
-    bdd.ajoutDevoir("DS",2,"20.10.2017","MPSI",3)
-    bdd.ajoutDevoir("Interro",1,"15.09.2017","MPSI")
+    bdd.ajoutDevoir("MPSI","DS",1,"20.09.2017")
+    bdd.ajoutDevoir("MPSI","DS",2,"20.10.2017",3)
+    bdd.ajoutDevoir("MPSI","Interro",1,"15.09.2017")
     afficherAction("Peuplement des devoirs... Récupération des devoirs :")
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
     bdd.retraitDevoir(2)
@@ -493,13 +514,20 @@ if __name__ == '__main__':
     bdd.retraitTypeModificateur("bonusMalus")
     afficherAction("Retrait du type 'bonusMalus'... Récupération des types :")
     afficherRetour(bdd.récupèreTypesModificateur())
-    bdd.ajoutModificateur('pointsFixes',1,'Présentation',2)
-    bdd.ajoutModificateur('pointsFixes',1,'Homogénéité',3)
+    bdd.ajoutModificateur(1,'pointsFixes','Présentation',2)
+    bdd.ajoutModificateur(1,'pointsFixes','Homogénéité',3)
     afficherAction("Création d'un modificateur... Récupération des modificateurs du devoir 1 :")
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
-    bdd.retraitModificateur('Présentation',1)
+    bdd.retraitModificateur(1,'Présentation')
     afficherAction("Retrait du modificateur 'Présentation'... Récupération des modificateurs du devoir 1 :")
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
 
     afficherSéparateur()
     bdd.fermerDB()
+
+
+if __name__ == '__main__':
+    # effectuerTests()
+    # bdd = BaseDeDonnées("competences.db")
+    # bdd.créerSchéma()
+    pass

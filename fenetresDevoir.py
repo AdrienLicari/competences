@@ -10,6 +10,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 from autocompletion import *
 from traitements.traitements import *
+from dbManagement.dbManagement import BaseDeDonnées
 
 ## Classe pour la création des questions d'un devoir
 class FenêtreQuestionsDevoir(object):
@@ -22,7 +23,7 @@ class FenêtreQuestionsDevoir(object):
     Ne gère pas l'attachement de plus de 10 compétences à chaque question.
     """
     maxCompétenceParQuestion = 10
-    def __init__(self, devoir:Devoir, builder:Gtk.Builder):
+    def __init__(self, devoir:Devoir, builder:Gtk.Builder, bdd:BaseDeDonnées, idDev:int):
         """
         Constructeur de la fenêtre.
 
@@ -108,6 +109,8 @@ class FenêtreQuestionsDevoir(object):
         self.vue.set_grid_lines(Gtk.TreeViewGridLines.BOTH)
         self.ajouterLigne(self.modèleModificateurs)
         # Initialisation des données
+        self.bdd = bdd
+        self.idDev = idDev
         self.màjModèle()
         self.gestionAffichage()
         # Lancement
@@ -178,6 +181,19 @@ class FenêtreQuestionsDevoir(object):
         self.devoir_save.set_modificateursDepuisModèle(listeModèle)
         self.devoir_save.set_noteMax(self.saisieNoteMax.get_text())
         self.devoir_save.set_niveauxAcquisition(self.saisieNvxComp.get_text())
+        # Gestion de la BDD
+        [ self.bdd.retraitQuestion(self.idDev, nom[0]) for nom in self.bdd.récupérerQuestions(self.idDev) ]
+        questions = []
+        for l in self.devoir_save.get_listeQuestionsModèle(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
+            n = l[0]
+            comps = [ (l[2*i+1],l[2*i+2]) for i in range(len(l)//2) if l[2*i+1] != "" ]
+            questions.append((n,comps))
+        self.bdd.créerQuestions(self.idDev, questions)
+        [ self.bdd.retraitModificateur(self.idDev,a[1]) for a in self.bdd.récupèreModificateurs(self.idDev) ]
+        for mod in listeModèle:
+            self.bdd.ajoutModificateur(self.idDev,mod[0],mod[1],mod[2])
+        self.bdd.modifieNoteEtNiveauxDevoir(self.idDev, self.devoir_save.get_noteMax(), \
+                                            self.devoir_save.get_niveauxAcquisition())
         self.màjModèle()
 
 

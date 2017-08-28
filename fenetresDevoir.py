@@ -153,6 +153,8 @@ class FenêtreQuestionsDevoir(object):
         modèle,num,typ = data
         text = typ(text)
         modèle[path][num] = text
+        if modèle[path][0] == "":
+            modèle.remove(modèle.get_iter(path))
         if int(path) == len(modèle)-1:  # gestion de l'ajout de nouvelle ligne
             self.ajouterLigne(modèle)
         self.gestionAffichage()
@@ -182,18 +184,7 @@ class FenêtreQuestionsDevoir(object):
         self.devoir_save.set_noteMax(self.saisieNoteMax.get_text())
         self.devoir_save.set_niveauxAcquisition(self.saisieNvxComp.get_text())
         # Gestion de la BDD
-        [ self.bdd.retraitQuestion(self.idDev, nom[0]) for nom in self.bdd.récupérerQuestions(self.idDev) ]
-        questions = []
-        for l in self.devoir_save.get_listeQuestionsModèle(FenêtreQuestionsDevoir.maxCompétenceParQuestion):
-            n = l[0]
-            comps = [ (l[2*i+1],l[2*i+2]) for i in range(len(l)//2) if l[2*i+1] != "" ]
-            questions.append((n,comps))
-        self.bdd.créerQuestions(self.idDev, questions)
-        [ self.bdd.retraitModificateur(self.idDev,a[1]) for a in self.bdd.récupèreModificateurs(self.idDev) ]
-        for mod in listeModèle:
-            self.bdd.ajoutModificateur(self.idDev,mod[0],mod[1],mod[2])
-        self.bdd.modifieNoteEtNiveauxDevoir(self.idDev, self.devoir_save.get_noteMax(), \
-                                            self.devoir_save.get_niveauxAcquisition())
+        self.bdd.sauverDevoir(self.devoir_save.get_évaluationBDD())
         self.màjModèle()
 
 
@@ -207,7 +198,7 @@ class FenêtreÉvaluationDevoir(object):
     """
     colÉtNo, colÉtNom, colÉtPrésence, colÉtÉvalué = 0,1,2,3
     colQuest, colComp, colCoef, colÉval = 0,1,2,3
-    def __init__(self, devoir:Devoir, builder:Gtk.Builder):
+    def __init__(self, devoir:Devoir, builder:Gtk.Builder, bdd:BaseDeDonnées, idDev:int):
         """
         Constructeur de la fenêtre.
 
@@ -232,6 +223,8 @@ class FenêtreÉvaluationDevoir(object):
         # Préparation des attributs autres
         self.devoir_save = devoir
         self.étudiantActif = 0
+        self.bdd = bdd
+        self.idDev = idDev
         # Sélection des étudiants
         self.modèleÉtudiants = Gtk.ListStore(int,str,bool,bool)
         for ét in devoir.get_listeÉtudiantsModèle():
@@ -261,7 +254,7 @@ class FenêtreÉvaluationDevoir(object):
                                lambda col, cell, model, iter, unused:
                                cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
         # Mise en place du modèle
-        self.changeÉtudiant(self.sélecteurÉtudiant)
+        self.changeÉtudiant(self.sélecteurÉtudiant,False)
         rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
         builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
         # Connection des signaux
@@ -305,11 +298,12 @@ class FenêtreÉvaluationDevoir(object):
         """
         self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence] = switch.get_active()
 
-    def changeÉtudiant(self, sélecteur:Gtk.ComboBox) -> None:
+    def changeÉtudiant(self, sélecteur:Gtk.ComboBox, sauvegarder:bool=True) -> None:
         """
         Callback pour le changement d'étudiant.
         """
-        self.sauvegarderÉvaluation()
+        if sauvegarder:
+            self.sauvegarderÉvaluation()
         self.étudiantActif = self.sélecteurÉtudiant.get_active()
         self.modèle.clear()
         self.modèlePointsFixes.clear()
@@ -351,3 +345,4 @@ class FenêtreÉvaluationDevoir(object):
         uneÉval = (np.array([ row[FenêtreÉvaluationDevoir.colÉval] for row in self.modèle ]) > -1).any()
         présence = self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtPrésence]
         self.modèleÉtudiants[self.étudiantActif][FenêtreÉvaluationDevoir.colÉtÉvalué] = uneÉval or not présence
+        self.bdd.sauverÉvaluationUnÉtudiant(self.devoir_save.get_évaluationBDDUnÉtudiant(self.étudiantActif))

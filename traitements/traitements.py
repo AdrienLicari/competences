@@ -5,6 +5,7 @@ Module gérant le stockage et le traitement des données.
 """
 
 ## imports
+from itertools import product
 import numpy as np
 
 ## classe pour gérer les devoirs
@@ -46,6 +47,7 @@ class Devoir(object):
     """
     maxQuestions = 100
     maxCompétences = 100
+    maxModifs = 10
     # Fonctions d'intéraction avec l'interface
     def __init__(self, classe:str, typ:str, num:int, date:str, noteMax:int, nvxAcq:int, étudiants:list, \
                  pointsFixes:list=[], modificateurs:list=[]) -> 'Devoir':
@@ -71,10 +73,10 @@ class Devoir(object):
         self.coeff = np.zeros(shape=(Devoir.maxQuestions,Devoir.maxCompétences),dtype=int)
         self.nvxAcq = nvxAcq
         self.éval = -np.ones(shape=(Devoir.maxQuestions,Devoir.maxCompétences,len(self.étudiants)),dtype=int)
-        self.évalPointsFixes = np.zeros(shape=(len(self.pointsFixes),len(self.étudiants)),dtype=float)
+        self.évalPointsFixes = np.zeros(shape=(Devoir.maxModifs,len(self.étudiants)),dtype=float)
         for i,pf in enumerate(self.pointsFixes):
             self.évalPointsFixes[i,:] = pf[1]
-        self.évalModificateurs = np.zeros(shape=(len(self.modificateurs),len(self.étudiants)),dtype=int)
+        self.évalModificateurs = np.zeros(shape=(Devoir.maxModifs,len(self.étudiants)),dtype=int)
 
     def copie(self):
         """
@@ -186,6 +188,25 @@ class Devoir(object):
                     self.compétences[self.actuelNombreCompétences()] = comp
                 j = np.where(self.compétences == comp)[0]
                 self.coeff[i,j] = coefs[k]
+            # retrait des compétences associées à cette question qui ont (éventuellement) disparu
+            for j in [k for k in range(self.actuelNombreCompétences()) if self.compétences[k] not in comps]:
+                self.coeff[i,j] = 0
+                self.éval[i,j,:] = -1
+        # retrait des questions devenues obsolètes
+        for i in [k for k in range(self.actuelNombreQuestions()) if self.questions[k] not in [q[0] for q in modèle]]:
+            self.questions[i] = ""
+            self.coeff[i,:] = 0
+            self.éval[i,:,:] = -1
+        # recompression des tableaux
+        self.questions[ self.questions == "" ] = "zz"  # changement temporaire pour les np.sort
+        self.compétences[ self.compétences == "" ] = "zz"
+        indsQ, indsC = np.argsort(self.questions), np.argsort(self.compétences)
+        self.questions[ self.questions == "zz" ] = ""
+        self.compétences[ self.compétences == "zz" ] = ""
+        self.questions = self.questions[indsQ]
+        self.compétences = self.compétences[indsC]
+        self.coeff = self.coeff[indsQ][:,indsC]
+        self.éval = self.éval[indsQ][:,indsC,:]
 
     def get_listeCatégoriesModificateurs(self) -> list:
         """
@@ -207,9 +228,21 @@ class Devoir(object):
         """
         Prend en paramètre une liste [(type,nom,valeur)] et peuple les listes
         self.pointsFixes et self.modificateurs en conséquence
+        Met à jour les éval
         """
-        self.pointsFixes   = [ (a[1],a[2]) for a in liste if a[0] == "points fixes" ]
-        self.modificateurs = [ (a[1],a[2]) for a in liste if a[0] == "pourcentage" ]
+        for a in [ b for b in liste if b[0] == "points fixes" if (b[1],b[2]) not in self.pointsFixes ]:
+            self.pointsFixes.append((a[1],a[2]))
+        iSupp = [ i for (i,val) in enumerate(self.pointsFixes) if val not in [(a[1],a[2]) for a in liste] ]
+        for index in sorted(iSupp, reverse=True):
+            del self.pointsFixes[index]
+            self.évalPointsFixes[index:-1] = self.évalPointsFixes[index+1:]
+
+        for a in [ b for b in liste if b[0] == "pourcentage" if (b[1],b[2]) not in self.modificateurs ]:
+            self.modificateurs.append((a[1],a[2]))
+        iSupp = [ i for (i,val) in enumerate(self.modificateurs) if val not in [(a[1],a[2]) for a in liste] ]
+        for index in sorted(iSupp, reverse=True):
+            del self.modificateurs[index]
+            self.évalModificateurs[index:-1] = self.évalModificateurs[index+1:]
 
     def get_évaluationÉtudiantModèle(self, numÉtudiant:int) -> (list,bool):
         """
@@ -256,6 +289,78 @@ class Devoir(object):
                 i = np.where(self.questions == comp[0])[0]
                 j = np.where(self.compétences == comp[1])[0]
                 self.éval[i,j,numÉtudiant] = comp[3]
+
+    def get_évaluationBDD(self) -> dict:
+        """
+        Construit les informations de l'évaluation (présence, points, modificateurs) selon un
+        pattern utilisable par la BDD.
+        """
+        ret = {}
+        ret['classe'] = self.classe
+        ret['devoirType'] = self.typ
+        ret['devoirNum'] = self.num
+        ret['date'] = self.date
+        ret['noteMax'] = self.noteMax
+        ret['nvxAcq'] = self.nvxAcq
+        ret['étudiants'] = self.étudiants
+        ret['questions'] = [ (q,[(c,self.coeff[i,j]) for (j,c) in enumerate(self.compétences)      \
+                                 if self.coeff[i,j] != 0 ]) for (i,q) in enumerate(self.questions) if q != "" ]
+        ret['éval'] = [ (q,c,self.éval[i,j,:]) for (i,q),(j,c) in \
+                        product(enumerate(self.questions),enumerate(self.compétences)) if self.coeff[i,j] != 0]
+        ret['modificateurs'] = [ ('points fixes',p[0],p[1],self.évalPointsFixes[i,:]) \
+                                 for i,p in enumerate(self.pointsFixes) ] + \
+                                [ ('pourcentage',p[0],p[1],self.évalModificateurs[i,:]) \
+                                 for i,p in enumerate(self.modificateurs) ]
+        return(ret)
+
+    def get_évaluationBDDUnÉtudiant(self, num:int) -> dict:
+        """
+        Construit les informations de l'évaluation (présence, points, modificateurs) selon un
+        pattern utilisable par la BDD.
+        """
+        ret = {}
+        ret['classe'] = self.classe
+        ret['devoirType'] = self.typ
+        ret['devoirNum'] = self.num
+        ret['date'] = self.date
+        ret['noteMax'] = self.noteMax
+        ret['nvxAcq'] = self.nvxAcq
+        ret['étudiant'] = self.étudiants[num]
+        ret['questions'] = [ (q,[(c,self.coeff[i,j]) for (j,c) in enumerate(self.compétences)      \
+                                 if self.coeff[i,j] != 0 ]) for (i,q) in enumerate(self.questions) if q != "" ]
+        ret['éval'] = [ (q,c,self.éval[i,j,num]) for (i,q),(j,c) in \
+                        product(enumerate(self.questions),enumerate(self.compétences)) if self.coeff[i,j] != 0]
+        ret['modificateurs'] = [ ('points fixes',p[0],p[1],self.évalPointsFixes[i,num]) \
+                                 for i,p in enumerate(self.pointsFixes) ] + \
+                                [ ('pourcentage',p[0],p[1],self.évalModificateurs[i,num]) \
+                                 for i,p in enumerate(self.modificateurs) ]
+        return(ret)
+
+    def set_évaluationBDD(self, évaluation:dict) -> None:
+        """
+        Récupère les évaluations du devoir depuis un dict et met à jour l'objet Devoir.
+
+        Le dictionnaire à l'entrée contient les champs suivants :
+        - présence : une liste de tuples (nomÉtudiant,prénomÉtudiant,présence)
+        - éval : une liste de tuples (nomQuestion,nomCompétence,nomÉtudiant,prénomÉtudiant,note)
+        - pointsFixes : une liste de tuples (nomItem,nomÉtudiant,prénomÉtudiant,note)
+        - modifs : une liste de tuples (nomItem,nomÉtudiant,prénomÉtudiant,note) pour les pourcentages
+        """
+        étInds = {}  # Construction des indices (internes) associés aux étudiants par paire nom,prénom
+        for i,val in enumerate(self.étudiants):
+            étInds[(val[0],val[1])] = i
+        for n,p,pres in évaluation['présence']:
+            self.étudiants[étInds[(n,p)]] = [n,p,bool(pres)]
+        for q,c,n,p,éval in évaluation['éval']:
+            i = [k for (k,nQ) in enumerate(self.questions) if nQ == q ][0]
+            j = [k for (k,nC) in enumerate(self.compétences) if nC == c ][0]
+            self.éval[i,j,étInds[(n,p)]] = éval
+        for pf,n,p,éval in évaluation['pointsFixes']:
+            for i in  [k for (k,nP) in enumerate(self.pointsFixes) if nP[0] == pf ]:
+                self.évalPointsFixes[i,étInds[(n,p)]] = éval
+        for m,n,p,éval in évaluation['modifs']:
+            for i in [k for (k,nM) in enumerate(self.modificateurs) if nM == m ]:
+                self.évalModificateurs[i,j,étInds[(n,p)]] = éval
 
     # Traitement des données
     def calculerRésultatsParCompétences(self) -> dict:

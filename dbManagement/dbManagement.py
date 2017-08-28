@@ -7,7 +7,7 @@ Les fonctions fournies par ce module sont adaptées aux besoins du code généra
 
 ## imports
 import sqlite3 as s
-
+import time
 
 ## Classe gestionnaire de la base de données.
 class BaseDeDonnées(object):
@@ -68,11 +68,21 @@ class BaseDeDonnées(object):
                                        "foreign key(devoirId) references devoir(id), " + \
                                        "foreign key(typesModificateursÉvaluationId) references " + \
                                        "typesModificateursÉvaluation(id));"
+        str_tableEtudiantsEvaluationCompetences = "CREATE TABLE IF NOT EXISTS etudiantsEvaluationCompetence " + \
+                                       "(id integer primary key autoincrement, etudiantsId int, " + \
+                                       "questionsCompetencesId int, evaluation int, " + \
+                                       "foreign key(etudiantsId) references etudiants(id), " + \
+                                       "foreign key(questionsCompetencesId) references questionsCompetences(id));"
         str_tableEtudiantsEvaluationModificateurs = "CREATE TABLE IF NOT EXISTS etudiantsEvaluationModificateurs " + \
                                        "(id integer primary key autoincrement, etudiantsId int, " + \
                                        "modificateursDevoirId int, evaluation float," + \
                                        "foreign key(etudiantsId) references etudiants(id), " + \
                                        "foreign key(modificateursDevoirId) references modificateursDevoir(id));"
+        str_tableEtudiantsPresenceDevoir = "CREATE TABLE IF NOT EXISTS etudiantsPresenceDevoir " + \
+                                           "(id integer primary key autoincrement, devoirId int, " + \
+                                           "etudiantsId int, presence boolean, " + \
+                                           "foreign key(devoirId) references devoir(id), " + \
+                                           "foreign key(etudiantsId) references etudiants(id));"
         # lancement des requêtes
         c.execute(str_tablesimple('competenceType'))
         c.execute(str_tablesimple('competenceChapitre'))
@@ -85,7 +95,10 @@ class BaseDeDonnées(object):
         c.execute(str_tableQuestionsCompétences)
         c.execute(str_tablesimple("typesModificateursÉvaluation"))
         c.execute(str_tableModificateursDevoir)
+        c.execute(str_tableEtudiantsEvaluationCompetences)
         c.execute(str_tableEtudiantsEvaluationModificateurs)
+        c.execute(str_tableEtudiantsPresenceDevoir)
+        self.conn.commit()
 
     def ajouteDansTable(self, table:str, vals:dict) -> None:
         """
@@ -112,9 +125,11 @@ class BaseDeDonnées(object):
             else:
                 if isinstance(valeur,str):
                     str_valeurs += """"{}",""".format(valeur)
+                elif isinstance(valeur,bool):
+                    str_valeurs += """{},""".format(int(valeur))
                 else:
                     str_valeurs += """{},""".format(valeur)
-        str_requete = """insert into {} """.format(table) + str_champs[:-1] + \
+        str_requete = """replace into {} """.format(table) + str_champs[:-1] + \
                       """) values """ + str_valeurs[:-1] + """);"""
         c.execute(str_requete)
         self.conn.commit()
@@ -150,24 +165,21 @@ class BaseDeDonnées(object):
         a = [ {b:t for (b,t) in zip(champs,ligne)} for ligne in c.fetchall() ]
         return(a)
 
-    def récupèreId(self, table:str, conditions:dict) -> int:
+    def récupèreIds(self, table:str, conditions:dict) -> list:
         """
-        Renvoie l'id et le nom d'une entrée identifiée par un ensemble de conditions.
+        Renvoie les id des entrées identifiées par un ensemble de conditions.
         """
         c = self.conn.cursor()
         str_récup = """select id from {} where """.format(table)
         for key,val in conditions.items():
-            if type(val) == int or type(val) == float:
-                str_récup += "{} = {} and ".format(key,val)
-            elif type(val) == str:
+            if type(val) == str and "(select " not in val:
                 str_récup += """{} like "{}" and """.format(key,val)
+            else:
+                str_récup += "{} = {} and ".format(key,val)
         str_récup = str_récup[:-4] + ";"
         c.execute(str_récup)
-        a = c.fetchall()
-        if len(a) == 0:
-            return(-1)
-        else:
-            return(a[0][0])
+        a = [ b[0] for b in c.fetchall() ]
+        return(a)
 
     # Une série de fonctions courtes pour les cas courants
     def ajoutCompétenceType(self, nom:str) -> None:
@@ -241,11 +253,11 @@ class BaseDeDonnées(object):
     def récupèreÉtudiants(self, classe:str) -> list:
         """ Fonction qui récupère l'ensemble des étudiants d'une classe """
         c = self.conn.cursor()
-        sql_str = "select etudiants.nom,etudiants.prenom from etudiants " + \
+        sql_str = "select etudiants.nom,etudiants.prenom,etudiants.id from etudiants " + \
                   "join classes on classeId = classes.id " + \
                   "where classes.nom like '{}' order by etudiants.nom;".format(classe)
         c.execute(sql_str)
-        a = [ {'nom':t[0], 'prenom':t[1]} for t in c.fetchall() ]
+        a = [ {'id':t[2], 'nom':t[0], 'prenom':t[1]} for t in c.fetchall() ]
         return(a)
 
     def ajoutTypeDevoir(self, nom:str) -> None:
@@ -262,13 +274,34 @@ class BaseDeDonnées(object):
         """
         Noter que la valeur par défaut des niveaux d'acquisition testés est 2 (acquis / non acquis)
         """
-        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, 'nvxAcq':niveauxAcquisition, 'noteMax':noteMax, \
-                                       'typeId':('devoirType','nom',typ), 'classeId':('classes','nom',classe)})
+        clId = self.récupèreIds("classes",{'nom':classe})[0]
+        tyId = self.récupèreIds("devoirType",{'nom':typ})[0]
+        self.ajouteDansTable('devoir',{'numero':numero, 'date':date, 'nvxAcq':niveauxAcquisition, \
+                                       'noteMax':noteMax, 'typeId':tyId, 'classeId':clId})
+        dvId = self.récupèreIds("devoir",{'numero':numero,'typeId':tyId, 'classeId':clId})[0]
+        étsId = self.récupèreIds("etudiants",{"classeId":clId})
+        for i in étsId:
+            self.ajouteDansTable("etudiantsPresenceDevoirs",{"etudiantsId":i,"devoirId":dvId,"presence":True})
 
-    def retraitDevoir(self, idDevoir:int) -> None:
-        [ self.retraitQuestion(idDevoir,a[0]) for a in self.récupérerQuestions(idDevoir) ]
-        [ self.retraitModificateur(idDevoir,a[1]) for a in self.récupèreModificateurs(idDevoir) ]
-        self.retraitDeTable('devoir',{'id':idDevoir})
+    def retraitDevoir(self, dvId:int) -> None:
+        list_str = lambda l: "{}".format(l)[1:-1]
+        c = self.conn.cursor()
+        quId = self.récupèreIds("questions",{"devoirId":dvId})
+        cpId = []
+        for i in quId :
+            cpId += self.récupèreIds("questionsCompetences",{"questionsId":i})
+        mdId = self.récupèreIds("modificateursDevoir",{"devoirId":dvId})
+        str_sql = ["delete from etudiantsPresenceDevoirs where devoirId = {};".format(dvId)]
+        str_sql += ["delete from etudiantsEvaluationCompetence " + \
+                   "where questionsCompetencesId in ({});".format(list_str(cpId))]
+        str_sql += ["delete from questionsCompetences where questionsId in ({});".format(list_str(quId))]
+        str_sql += ["delete from questions where devoirId = {};".format(dvId)]
+        str_sql += ["delete from etudiantsEvaluationModificateurs " + \
+                   "where modificateursDevoirId in ({});".format(list_str(mdId))]
+        str_sql += ["delete from modificateursDevoir where devoirId = {};".format(dvId)]
+        str_sql += ["delete from devoir where id = {};".format(dvId)]
+        [ c.execute(s) for s in str_sql ]
+        self.conn.commit()
 
     def récupèreDevoirs(self) -> list:
         """ Fonction qui récupère l'ensemble des devoirs """
@@ -295,20 +328,22 @@ class BaseDeDonnées(object):
         c = self.conn.cursor()
         for q in liste:
             self.ajouteDansTable("questions",{'nom':q[0],'devoirId':devoir})
-            q_id = self.récupèreId("questions",{'nom':q[0]})
-            for comp in q[1]:
-                c_id = self.récupèreId("competence",{'nom':comp[0]})
-                if c_id != -1:
-                    self.ajouteDansTable("questionsCompetences", \
-                                         {"questionsId":q_id,"competenceId":c_id,"coefficient":comp[1]})
+            q_id = self.récupèreIds("questions",{'nom':q[0], 'devoirId':devoir})[0]
+            vals = [ """({},(select id from competence where nom like "{}"),{});""".format(q_id,comp[0],comp[1]) \
+                     for comp in q[1] ]
+            sql_str = "insert into questionsCompetences(questionsId,competenceId,coefficient) values "
+            for a in vals:
+                c.execute(sql_str + a)
 
     def retraitQuestion(self, devoir:int, nomQuestion:str) -> None:
         """
         Cette fonction commence par vider toutes les lignes de questionsCompetences associées à la question.
         """
         c = self.conn.cursor()
-        c.execute("select id from questions where nom like '{}';".format(nomQuestion))
+        c.execute("select id from questions where nom like '{}' and devoirId = {};".format(nomQuestion,devoir))
         i = [ a for a in c.fetchall() ][0][0]
+        c.execute("delete from etudiantsEvaluationCompetence where " + \
+                  "questionsCompetencesId = (select id from questionsCompetences where questionsId = {});".format(i))
         self.retraitDeTable('questionsCompetences', {'questionsId':i})
         self.retraitDeTable('questions',{'devoirId':devoir,'nom':nomQuestion})
 
@@ -357,6 +392,162 @@ class BaseDeDonnées(object):
         c.execute(str_sql)
         liste = [ (a[0],a[1],a[2]) for a in c.fetchall() ]
         return(liste)
+
+    def sauverDevoir(self, infos:dict) -> None:
+        """
+        Met à jour la BDD avec les évaluations. Le dictionnaire doit avoir les entrées suivantes :
+        - classe, types, num, date
+        - étudiants : liste (nom,prénom,présent)
+        - éval : une liste de tuples (nomQuestion, nomCompétence, évaluation)
+        - modificateurs : une liste de tuples (typeModif, nomModif, évaluation)
+        """
+        # Vidage
+        c = self.conn.cursor()
+        clId = self.récupèreIds("classes",{"nom":infos['classe']})[0]
+        dvId = self.récupèreIds("devoir",{"classeId":clId, "numero":infos['devoirNum'], \
+                                         "typeId":"""(select id from devoirType where nom like "{}")""".\
+                                          format(infos['devoirType'])})[0]
+        self.retraitDevoir(dvId)
+        # Recréation
+        self.ajoutDevoir(infos['classe'],infos['devoirType'],infos['devoirNum'],infos['date'],\
+                         infos['noteMax'],infos['nvxAcq'])
+        dvId = self.récupèreIds("devoir",{"classeId":clId, "numero":infos['devoirNum'], \
+                                         "typeId":"""(select id from devoirType where nom like "{}")""".\
+                                          format(infos['devoirType'])})[0]
+        self.créerQuestions(dvId, infos['questions'])
+        [ self.ajoutModificateur(dvId, a[0], a[1], a[2]) for a in infos['modificateurs'] ]
+        kÉts = range(len(infos['étudiants']))
+        étudiantsBDD = self.récupèreÉtudiants(infos['classe'])
+        idÉts = [ étudiantsBDD[k]['id'] for k in kÉts ]
+        # Présence
+        sql_str = "replace into etudiantsPresenceDevoirs (id,devoirId,etudiantsId,presence) values "
+        for k in kÉts:
+            p_id = self.récupèreIds("etudiantsPresenceDevoirs",{"devoirId":dvId,"etudiantsId":idÉts[k]})[0]
+            sql_str += "({},{},{},{}), ".format(p_id,dvId,idÉts[k],int(infos['étudiants'][k][2]))
+        sql_str = sql_str[:-2] + ";"
+        c.execute(sql_str)
+        # Évaluation
+        sql_str = "replace into etudiantsEvaluationCompetence "
+        sql_str += "(etudiantsId,questionsCompetencesId,evaluation) values "
+        if len(infos['éval']) != 0:
+            for quest,comp,éval in infos['éval']:
+                sql_interm = "select qc.id from questionsCompetences as qc " + \
+                             "join competence as c on c.id = qc.competenceId " + \
+                             "join questions as q on q.id = qc.questionsId " + \
+                             """where q.nom like "{}" and c.nom like "{}";""".format(quest,comp)
+                qc_id = [ a[0] for a in c.execute(sql_interm) ][0]
+                for k in kÉts:
+                    sql_str += "({},{},{}), ".format(idÉts[k],qc_id,éval[k])
+            sql_str = sql_str[:-2] + ";"
+            c.execute(sql_str)
+        # Modificateurs
+        sql_str= "replace into etudiantsEvaluationModificateurs "
+        sql_str += "(etudiantsId,modificateursDevoirId,evaluation) values "
+        if len(infos['modificateurs']) != 0:
+            for typ,nom,maxi,éval in infos['modificateurs']:
+                sql_interm = "select modificateursDevoir.id from modificateursDevoir " + \
+                             "join typesModificateursÉvaluation " + \
+                             "on typesModificateursÉvaluation.id = typesModificateursÉvaluationId " + \
+                             """where typesModificateursÉvaluation.nom like "{}" """.format(typ) + \
+                             """ and modificateursDevoir.nom like "{}" """.format(nom) + \
+                             "and modificateursDevoir.devoirId = {};".format(dvId)
+                mod_id = [ a[0] for a in c.execute(sql_interm) ][0]
+                for k in kÉts:
+                    sql_str += "({},{},{}), ".format(idÉts[k],mod_id,éval[k])
+            sql_str = sql_str[:-2] + ";"
+            c.execute(sql_str)
+        self.conn.commit()
+
+    def récupérerÉvaluation(self, idDev:int) -> dict:
+        """
+        Renvoie un dictionnaire contenant :
+        - présence : une liste de tuples (nomÉtudiant,prénomÉtudiant,présence)
+        - éval : une liste de tuples (nomQuestion,nomCompétence,nomÉtudiant,prénomÉtudiant,note)
+        - pointsFixes : une liste de tuples (nomItem,nomÉtudiant,prénomÉtudiant,note)
+        - modifs : une liste de tuples (nomItem,nomÉtudiant,prénomÉtudiant,note) pour les pourcentages
+        """
+        ret = {}
+        c = self.conn.cursor()
+        str_sql = "select etudiants.nom, etudiants.prenom, etudiantsPresenceDevoirs.presence "+ \
+                  "from etudiants join etudiantsPresenceDevoirs " + \
+                  "on etudiants.id = etudiantsPresenceDevoirs.etudiantsId " + \
+                  "where etudiantsPresenceDevoirs.devoirId = {};".format(idDev)
+        ret['présence'] = [ (a[0],a[1],a[2] == 1) for a in c.execute(str_sql) ]
+        str_sql = "select Q.nom, C.nom, E.nom, E.prenom, EEC.evaluation " + \
+                  "from etudiants as E join etudiantsEvaluationCompetence as EEC on E.id = EEC.etudiantsId " + \
+                  "join questionsCompetences as QC on EEC.questionsCompetencesId = QC.id " + \
+                  "join competence as C on QC.competenceId = C.id " + \
+                  "join questions as Q on QC.questionsId = Q.id " + \
+                  "where Q.devoirId = {};".format(idDev)
+        ret['éval'] = [ a for a in c.execute(str_sql) ]
+        str_sql = "select M.nom, E.nom, E.prenom, EEM.evaluation from etudiants as E " + \
+                  "join etudiantsEvaluationModificateurs as EEM on E.id = EEM.etudiantsId " + \
+                  "join modificateursDevoir as M on EEM.modificateursDevoirId = M.id " + \
+                  "join typesModificateursÉvaluation as T " + \
+                  "on M.typesModificateursÉvaluationId = T.id " + \
+                  "where M.devoirId = {} and T.nom like 'points fixes';".format(idDev)
+        ret['pointsFixes'] = [ a for a in c.execute(str_sql) ]
+        str_sql = "select M.nom, E.nom, E.prenom, EEM.evaluation from etudiants as E " + \
+                  "join etudiantsEvaluationModificateurs as EEM on E.id = EEM.etudiantsId " + \
+                  "join modificateursDevoir as M on EEM.modificateursDevoirId = M.id " + \
+                  "join typesModificateursÉvaluation as T " + \
+                  "on M.typesModificateursÉvaluationId = T.id " + \
+                  "where M.devoirId = {} and T.nom like 'pourcentage';".format(idDev)
+        ret['modifs'] = [ a for a in c.execute(str_sql) ]
+        return(ret)
+
+    def sauverÉvaluationUnÉtudiant(self, infos:dict) -> None:
+        """
+        Met à jour la BDD avec les évaluations. Le dictionnaire doit avoir les entrées suivantes :
+        - classe, types, num, date
+        - étudiants : (nom,prénom,présent)
+        - éval : une liste de tuples (nomQuestion, nomCompétence, évaluation)
+        - modificateurs : une liste de tuples (typeModif, nomModif, évaluation)
+        """
+        c = self.conn.cursor()
+        clId = self.récupèreIds("classes",{"nom":infos['classe']})[0]
+        dvId = self.récupèreIds("devoir",{"classeId":clId, "numero":infos['devoirNum'], \
+                                         "typeId":"""(select id from devoirType where nom like "{}")""".\
+                                          format(infos['devoirType'])})[0]
+        idÉt = self.récupèreIds("etudiants",{"nom":infos['étudiant'][0],"prenom":infos['étudiant'][1]})[0]
+        # Présence
+        sql_str = "replace into etudiantsPresenceDevoirs (id,devoirId,etudiantsId,presence) values "
+        sql_str += "((select id from etudiantsPresenceDevoirs where devoirId={} and etudiantsId={}),{},{},{});".\
+                        format(dvId,idÉt,dvId,idÉt,int(infos['étudiant'][2]))
+        c.execute(sql_str)
+        # Évaluation
+        sql_str = "replace into etudiantsEvaluationCompetence "
+        sql_str += "(id,etudiantsId,questionsCompetencesId,evaluation) values "
+        if len(infos['éval']) != 0:
+            for quest,comp,éval in infos['éval']:
+                sql_interm = "select qc.id from questionsCompetences as qc " + \
+                             "join competence as c on c.id = qc.competenceId " + \
+                             "join questions as q on q.id = qc.questionsId " + \
+                             """where q.nom like "{}" and c.nom like "{}";""".format(quest,comp)
+                qc_id = [ a[0] for a in c.execute(sql_interm) ][0]
+                eval_id = self.récupèreIds("etudiantsEvaluationCompetence", \
+                                           {"questionsCompetencesId":qc_id,"etudiantsId":idÉt})[0]
+                sql_str += "({},{},{},{}), ".format(eval_id,idÉt,qc_id,éval)
+            sql_str = sql_str[:-2] + ";"
+            c.execute(sql_str)
+        # Modificateurs
+        sql_str= "replace into etudiantsEvaluationModificateurs "
+        sql_str += "(id,etudiantsId,modificateursDevoirId,evaluation) values "
+        if len(infos['modificateurs']) != 0:
+            for typ,nom,maxi,éval in infos['modificateurs']:
+                sql_interm = "select modificateursDevoir.id from modificateursDevoir " + \
+                             "join typesModificateursÉvaluation " + \
+                             "on typesModificateursÉvaluation.id = typesModificateursÉvaluationId " + \
+                             """where typesModificateursÉvaluation.nom like "{}" """.format(typ) + \
+                             """ and modificateursDevoir.nom like "{}" """.format(nom) + \
+                             "and modificateursDevoir.devoirId = {};".format(dvId)
+                mod_id = [ a[0] for a in c.execute(sql_interm) ][0]
+                eval_id = self.récupèreIds("etudiantsEvaluationModificateurs",\
+                                           {"modificateursDevoirId":mod_id, "etudiantsId":idÉt})[0]
+                sql_str += "({},{},{},{}), ".format(eval_id,idÉt,mod_id,éval)
+            sql_str = sql_str[:-2] + ";"
+            c.execute(sql_str)
+        self.conn.commit()
 
 
 ## Partie main pour tests
@@ -413,42 +604,42 @@ def effectuerTests() -> None:
     tab = ['technique','analyse','connaissance']
     afficherAction("Récupération des types de compétence :")
     afficherRetour(bdd.récupèreCompétenceTypes())
-    [ bdd.ajoutCompétenceType(compTp) for compTp in tab ]
     afficherAction("Peuplement... Récupération des types de compétence :")
+    [ bdd.ajoutCompétenceType(compTp) for compTp in tab ]
     afficherRetour(bdd.récupèreCompétenceTypes())
-    bdd.retraitCompétenceType('technique')
     afficherAction("Retrait de 'technique'... Récupération des types de compétence :")
+    bdd.retraitCompétenceType('technique')
     afficherRetour(bdd.récupèreCompétenceTypes())
+    afficherAction("Repeuplement correct de la base")
     [ bdd.retraitCompétenceType(t['nom']) for t in bdd.récupèreCompétenceTypes() ]
     [ bdd.ajoutCompétenceType(compTp) for compTp in tab ]
-    afficherAction("Repeuplement correct de la base")
 
     # Test de gestion de la table des chapitres de compétences
     afficherSection("Test de l'interface avec la table compétenceChapitre")
     tab = ['généralités','mécanique','transformations chimiques']
     afficherAction("Récupération des chapitres existants :")
     afficherRetour(bdd.récupèreCompétenceChapitres())
-    [ bdd.ajoutCompétenceChapitre(compTp) for compTp in tab ]
     afficherAction("Peuplement... Récupération des chapitres existants :")
+    [ bdd.ajoutCompétenceChapitre(compTp) for compTp in tab ]
     afficherRetour(bdd.récupèreCompétenceChapitres())
-    bdd.retraitCompétenceChapitre('mécanique')
     afficherAction("Retrait de 'mécanique'... Récupération des chapitres existants :")
+    bdd.retraitCompétenceChapitre('mécanique')
     afficherRetour(bdd.récupèreCompétenceChapitres())
+    afficherAction("Repeuplement correct de la base")
     [ bdd.retraitCompétenceChapitre(t['nom']) for t in bdd.récupèreCompétenceChapitres() ]
     [ bdd.ajoutCompétenceChapitre(compTp) for compTp in tab ]
-    afficherAction("Repeuplement correct de la base")
 
     # Test des insertions avec liens entre tables
     afficherSection("Test de l'interface avec competences")
+    afficherAction("Peuplement... Contenu de la table competence après ajouts :")
     bdd.ajoutCompétence("Vérifier l'homogénéité","généralités","technique")
     bdd.ajoutCompétence("Écrire la loi de Newton","mécanique","technique")
     bdd.ajoutCompétence("Interpréter une mouvement par principe d'inertie","mécanique","analyse")
     c.execute("select * from competence;")
-    afficherAction("Peuplement... Contenu de la table competence après ajouts :")
     [ afficherLigne(tu) for tu in c.fetchall() ]
+    afficherAction("Retrait de 'Écrire la loi de Newton'... Contenu de la table competence après retrait :")
     bdd.retraitCompétence("Écrire la loi de Newton")
     c.execute("select * from competence;")
-    afficherAction("Retrait de 'Écrire la loi de Newton'... Contenu de la table competence après retrait :")
     [ afficherLigne(tu) for tu in c.fetchall() ]
     bdd.ajoutCompétence("Écrire la loi de Newton","mécanique","technique")
     afficherAction("Test d'ajout avec une clé externe fantaisiste :")
@@ -463,63 +654,63 @@ def effectuerTests() -> None:
 
     # Tables des classes et des élèves
     afficherSection("Test de l'interface avec les classes et les étudiants")
+    afficherAction("Peuplement de la base... Récupération des classes :")
     bdd.ajoutClasse("MPSI")
     bdd.ajoutClasse("MP")
     bdd.ajoutClasse("PSI")
-    afficherAction("Peuplement de la base... Récupération des classes :")
     afficherRetour(bdd.récupèreClasses())
-    bdd.retraitClasse("PSI")
     afficherAction("Retrait de la classe 'PSI'... Récupération des classes :")
+    bdd.retraitClasse("PSI")
     afficherRetour(bdd.récupèreClasses())
     listeDépart = [('Alp','Selin'), ('Gourgues','Maxime'), ('Morceaux','Jérémy')]
-    bdd.ajoutListeÉtudiants(listeDépart,'MPSI')
     afficherAction("Peuplement de la MPSI... Récupération des classes :")
+    bdd.ajoutListeÉtudiants(listeDépart,'MPSI')
     [ afficherLigne(l) for l in bdd.récupèreÉtudiants("MPSI") ]
+    afficherAction("Modification de la MPSI... Récupération des classes :")
     bdd.ajoutÉtudiant("Bazin","Jérémy","MPSI")
     bdd.retraitÉtudiant("Gourgues", "Maxime")
-    afficherAction("Modification de la MPSI... Récupération des classes :")
     [ afficherLigne(l) for l in bdd.récupèreÉtudiants("MPSI") ]
 
     # Tables des devoirs
     afficherSection("Test de l'interface avec les devoirs")
+    afficherAction("Peuplement des types de devoirs... Récupération des types :")
     bdd.ajoutTypeDevoir('DS')
     bdd.ajoutTypeDevoir('Interro')
     bdd.ajoutTypeDevoir('DM')
-    afficherAction("Peuplement des types de devoirs... Récupération des types :")
     afficherRetour(bdd.récupèreTypesDevoirs())
-    bdd.retraitTypeDevoir('DM')
     afficherAction("Retrait du type de devoirs 'DM'... Récupération des types :")
+    bdd.retraitTypeDevoir('DM')
     afficherRetour(bdd.récupèreTypesDevoirs())
+    afficherAction("Peuplement des devoirs... Récupération des devoirs :")
     bdd.ajoutDevoir("MPSI","DS",1,"20.09.2017")
     bdd.ajoutDevoir("MPSI","DS",2,"20.10.2017",3)
     bdd.ajoutDevoir("MPSI","Interro",1,"15.09.2017")
-    afficherAction("Peuplement des devoirs... Récupération des devoirs :")
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
-    bdd.retraitDevoir(2)
     afficherAction("Retrait du devoirs n°2... Récupération des devoirs :")
+    bdd.retraitDevoir(2)
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
     questions = [('1.a',[("Vérifier l'homogénéité",1),("Interpréter une mouvement par principe d'inertie",2)]), \
                  ('1.b',[("Vérifier l'homogénéité",1),('Écrire la loi de Newton',2)]), \
                  ('2',  [('Écrire la loi de Newton',3)])]
-    bdd.créerQuestions(1,questions)
     afficherAction("Peuplement des questions du devoir 1... Récupération des questions :")
+    bdd.créerQuestions(1,questions)
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
-    bdd.retraitQuestion(1,'1.b')
     afficherAction("Retrait de la question 1.b du devoir 1... Récupération des questions :")
+    bdd.retraitQuestion(1,'1.b')
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
+    afficherAction("Peuplement des types de modificateurs... Récupération des types :")
     bdd.ajoutTypeModificateur('pointsFixes')
     bdd.ajoutTypeModificateur('bonusMalus')
-    afficherAction("Peuplement des types de modificateurs... Récupération des types :")
     afficherRetour(bdd.récupèreTypesModificateur())
-    bdd.retraitTypeModificateur("bonusMalus")
     afficherAction("Retrait du type 'bonusMalus'... Récupération des types :")
+    bdd.retraitTypeModificateur("bonusMalus")
     afficherRetour(bdd.récupèreTypesModificateur())
+    afficherAction("Création d'un modificateur... Récupération des modificateurs du devoir 1 :")
     bdd.ajoutModificateur(1,'pointsFixes','Présentation',2)
     bdd.ajoutModificateur(1,'pointsFixes','Homogénéité',3)
-    afficherAction("Création d'un modificateur... Récupération des modificateurs du devoir 1 :")
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
-    bdd.retraitModificateur(1,'Présentation')
     afficherAction("Retrait du modificateur 'Présentation'... Récupération des modificateurs du devoir 1 :")
+    bdd.retraitModificateur(1,'Présentation')
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
 
     afficherSéparateur()
@@ -527,7 +718,7 @@ def effectuerTests() -> None:
 
 
 if __name__ == '__main__':
-    # effectuerTests()
+    effectuerTests()
     # bdd = BaseDeDonnées("competences.db")
     # bdd.créerSchéma()
     pass

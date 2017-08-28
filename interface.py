@@ -388,6 +388,7 @@ class FenêtrePrincipale(object):
             self.devoirs[-1].set_modificateursDepuisModèle(self.bdd.récupèreModificateurs(idDev))
             self.devoirs[-1].set_noteMax(noteMax)
             self.devoirs[-1].set_niveauxAcquisition(nvxAcq)
+            self.devoirs[-1].set_évaluationBDD(self.bdd.récupérerÉvaluation(idDev))
 
     # Fonctions liées à la gestion des classes / étudiants
     def chargerClasses(self):
@@ -612,7 +613,9 @@ class FenêtrePrincipale(object):
                                                        "Vous n'avez pas sélectionné de devoir")
         if it is not None:
             dev = [d for d in self.devoirs if d.correspondÀ(modèle[it])][0]
-            fenêtreÉvaluation = FenêtreÉvaluationDevoir(dev, self.builder)
+            idDev = [ a['id'] for a in self.bdd.récupèreDevoirs() if dev.correspondÀ([a['classe'], \
+                                                                                      a['type'],a['numéro']])][0]
+            fenêtreÉvaluation = FenêtreÉvaluationDevoir(dev, self.builder, self.bdd, idDev)
 
     def filtreVisibilitéDevoirs(self,model,it,data):
         """

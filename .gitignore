@@ -4,3 +4,4 @@ listeTestQuestions.txt
 interface.glade~
 __pycache__/
 */__pycache__/
+dbManagement/competences.db

@@ -7,6 +7,7 @@ Module principal gérant l'interface graphique.
 
 ## Temporaire : données hardcodées pour la phase de mise en place / tests
 # La mise en place de ces schémas est la même que pour la BDD
+# test de commit
 data_classes = ["Toutes","MPSI","MP","PSI"]
 data_étudiants = [["MPSI","Alp","Selin"],  # id, idClasse, nom, prénom
                   ["MPSI","Bazin","Jérémy"],

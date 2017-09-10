@@ -78,7 +78,7 @@ class BaseDeDonnées(object):
                                        "modificateursDevoirId int, evaluation float," + \
                                        "foreign key(etudiantsId) references etudiants(id), " + \
                                        "foreign key(modificateursDevoirId) references modificateursDevoir(id));"
-        str_tableEtudiantsPresenceDevoir = "CREATE TABLE IF NOT EXISTS etudiantsPresenceDevoir " + \
+        str_tableEtudiantsPresenceDevoir = "CREATE TABLE IF NOT EXISTS etudiantsPresenceDevoirs " + \
                                            "(id integer primary key autoincrement, devoirId int, " + \
                                            "etudiantsId int, presence boolean, " + \
                                            "foreign key(devoirId) references devoir(id), " + \
@@ -231,6 +231,12 @@ class BaseDeDonnées(object):
         self.ajouteDansTable('classes',{'nom':nom})
 
     def retraitClasse(self, nom:str) -> None:
+        id_cl = self.récupèreIds('classes',{'nom':nom})[0]
+        id_devs = self.récupèreIds('devoir',{'classeId':id_cl})
+        [self.retraitDevoir(i) for i in id_devs]
+        str_sql = "delete from etudiants where classeId={};".format(id_cl)
+        c = self.conn.cursor()
+        c.execute(str_sql)
         self.retraitDeTable('classes',{'nom':nom})
 
     def récupèreClasses(self) -> list:
@@ -685,6 +691,7 @@ def effectuerTests() -> None:
     bdd.ajoutDevoir("MPSI","DS",1,"20.09.2017")
     bdd.ajoutDevoir("MPSI","DS",2,"20.10.2017",3)
     bdd.ajoutDevoir("MPSI","Interro",1,"15.09.2017")
+    bdd.ajoutDevoir("MP","Interro",1,"15.11.2017")
     [ afficherLigne(l) for l in bdd.récupèreDevoirs() ]
     afficherAction("Retrait du devoirs n°2... Récupération des devoirs :")
     bdd.retraitDevoir(2)
@@ -692,11 +699,12 @@ def effectuerTests() -> None:
     questions = [('1.a',[("Vérifier l'homogénéité",1),("Interpréter une mouvement par principe d'inertie",2)]), \
                  ('1.b',[("Vérifier l'homogénéité",1),('Écrire la loi de Newton',2)]), \
                  ('2',  [('Écrire la loi de Newton',3)])]
+    iDev = bdd.récupèreDevoirs()[0]['id']
     afficherAction("Peuplement des questions du devoir 1... Récupération des questions :")
-    bdd.créerQuestions(1,questions)
+    bdd.créerQuestions(iDev,questions)
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
     afficherAction("Retrait de la question 1.b du devoir 1... Récupération des questions :")
-    bdd.retraitQuestion(1,'1.b')
+    bdd.retraitQuestion(iDev,'1.b')
     [ afficherLigne(l) for l in bdd.récupérerQuestions(1) ]
     afficherAction("Peuplement des types de modificateurs... Récupération des types :")
     bdd.ajoutTypeModificateur('pointsFixes')
@@ -706,19 +714,18 @@ def effectuerTests() -> None:
     bdd.retraitTypeModificateur("bonusMalus")
     afficherRetour(bdd.récupèreTypesModificateur())
     afficherAction("Création d'un modificateur... Récupération des modificateurs du devoir 1 :")
-    bdd.ajoutModificateur(1,'pointsFixes','Présentation',2)
-    bdd.ajoutModificateur(1,'pointsFixes','Homogénéité',3)
+    bdd.ajoutModificateur(iDev,'pointsFixes','Présentation',2)
+    bdd.ajoutModificateur(iDev,'pointsFixes','Homogénéité',3)
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
     afficherAction("Retrait du modificateur 'Présentation'... Récupération des modificateurs du devoir 1 :")
-    bdd.retraitModificateur(1,'Présentation')
+    bdd.retraitModificateur(iDev,'Présentation')
     [ afficherLigne(a) for a in bdd.récupèreModificateurs(1) ]
 
     afficherSéparateur()
+    bdd.retraitClasse("MPSI")
     bdd.fermerDB()
 
 
 if __name__ == '__main__':
     effectuerTests()
-    # bdd = BaseDeDonnées("competences.db")
-    # bdd.créerSchéma()
     pass

@@ -8,25 +8,6 @@ Module gérant le stockage et le traitement des données.
 from itertools import product
 import numpy as np
 
-def extrude(a, b, axis):
-    newShape = []
-    extendShape = []    
-    shapeA = a.shape
-    shapeB = b.shape
-    iA = 0
-    for iB in range(len(shapeB)):
-        if iB in axis:
-            newShape.append(shapeB[iB])
-            extendShape.append(1)
-        else:
-            newShape.append(shapeA[iA])
-            extendShape.append(shapeA[iA])
-            iA = iA + 1
-    ret = np.empty(newShape, dtype=b.dtype)
-    ret[...] = a.reshape(tuple(extendShape))
-    return ret
-
-
 ## classe pour gérer les devoirs
 class Devoir(object):
     """
@@ -389,11 +370,11 @@ class Devoir(object):
         - valeur : paire (éssais,réussites) les pourcentages d'essais des étudiants,
                    et de réussites des étudiants qui ont essayé
         """
-        réussites = np.sum(np.where(self.éval >= self.nvxAcq, 1, 0), axis=1)
-        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=1)        
+        réussites = np.sum(np.where(self.éval >= self.nvxAcq, 1, 0), axis=(0,2))
+        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=(0,2))        
         ret = {}
         for i in range(réussite.size()):
-            ret[i] = (éssais[i], réussites[i])
+            ret[self.compétences[i][0]] = (éssais[i], réussites[i])
         return(ret)
         
     def calculerRésultatsBruts(self) -> np.ndarray:
@@ -411,11 +392,7 @@ class Devoir(object):
         évaltmp = self.éval.astype(float)
         éval = np.where(évaltmp >= 0., évaltmp, 0.)
         coeff = self.coeff[:self.éval.shape[0], :self.éval.shape[1]]
-#        pointsFixes = self.pointsFixes[:self.évalPointsFixes.shape[0], :self.évalPointsFixes.shape[1]]
 
-
-
-#        modificateurs = self.modificateurs[:self.évalModificateurs.shape[0], :self.évalModificateurs.shape[1]]
         modificateurs = self.modificateurs
 
         pointsFixes = np.zeros((évalPointsFixes.shape[0]), dtype=float)
@@ -431,19 +408,12 @@ class Devoir(object):
             valeur = self.modificateurs[i][1]
             modificateurs[i] = valeur
 
-        print(np.sum(éval * extrude(coeff, éval, [2]), axis = (0,1)))
-        print(np.sum(coeff)*(self.nvxAcq-1))
-        print(self.noteMax - totalPointsFixes)
-        print(np.sum(évalPointsFixes * extrude(pointsFixes, évalPointsFixes, [1]), axis = 0))
-        print(np.product(évalModificateurs * extrude(modificateurs, évalModificateurs, [1]) + np.ones(évalModificateurs.shape, dtype=float), axis = 0))
-
-
         return (
-            (np.sum(éval * extrude(coeff, éval, [2]), axis = (0,1))
+            (np.sum(éval * coeff.reshape((coeff.shape[0], coeff.shape[1], 1)), axis = (0,1))
              / (np.sum(coeff)*(self.nvxAcq-1))
              * (self.noteMax - totalPointsFixes)
-             + np.sum(évalPointsFixes * extrude(pointsFixes, évalPointsFixes, [1]), axis = 0)
-            ) * np.product(évalModificateurs * extrude(modificateurs, évalModificateurs, [1]) + np.ones(évalModificateurs.shape, dtype=float), axis = 0)
+             + np.sum(évalPointsFixes * pointsFixes.reshape((pointsFixes.size, 1)), axis = 0)
+            ) * np.product(évalModificateurs * modificateurs.reshape((modificateurs.size, 1)) + np.ones(évalModificateurs.shape, dtype=float), axis = 0)
                )
             
 
@@ -460,17 +430,32 @@ class Devoir(object):
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        return(0)
+        
+        resultat = self.calculerRésultatsBruts()
+        multiplie = 1.
+        ajoute = 0.
+        
+        if traitements == "moyenne":
+            ajoute = note - np.mean(resultat)
+        if traitements == "mediane":
+            ajoute = note - np.median(resultat)
+        if traitements == "meilleure":
+            multiplie = note / np.max(resultat)
+        
+        return(resultat * multiplie + ajoute)
 
+    def nbQuestions(self) -> int:
+        return (np.sum(np.where(np.max(self.coeff, axis=1) >= 0, 1, 0)))
+        
     def calculerTauxDeComplétion(self) -> np.ndarray:
         """
         Calcule le teux de complétion du devoir pour chaque étudiant, en pourcentage du nombre de questions abordées.
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        return(0)
+        return (np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.), axis=0) / float(self.nbQuestions()))
 
-    def calculerRésultatsClasse(self) -> dict:
+    def calculerRésultatsClasse(self, traitements="aucun", note=20) -> dict:
         """
         Calcule les résultats après traitement. Renvoie un dict avec les éléments suivants:
         - clé 'moyenne': la moyenne de la classe
@@ -484,7 +469,26 @@ class Devoir(object):
         - pour chaque malus, une clé avec le nom du malus : le nombre d'étudiants ayant subi le malus
         - pour chaque bloc de points fixes, une clé avec le nom : la moyenne de la classe sur ce fixe
         """
-        return(0)
+        nbÉtudiants = float(len(self.étudiants))
+        nbQuestions = float(self.nbQuestions())
+        ret = {}
+        res = self.calculerRésultatsBruts()
+        ret['moyenne'] = np.mean(res)
+        ret['mediane'] = np.median(res)
+        ret['écart-type'] = np.std(res)
+        ret['premier'] = np.max(res)
+        ret['dernier'] = np.min(res)
+        ret['quantite'] = np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.)) * 100. / nbQuestions / nbÉtudiants
+        histo = []
+        for gauche in range(0,int(np.max(res)),2):
+            droite = gauche + 2.
+            histo.append(np.sum(np.where(np.logical_and(res >= gauche, res < droite), 1., 0.)))
+        ret['histogrammme'] = histo
+        for i in range(len(self.modificateurs)):
+            ret[self.modificateurs[i][0]] = np.sum(self.évalModificateurs[i])
+        for i in range(len(self.pointsFixes)):
+            ret[self.pointsFixes[i][0]] = self.pointsFixes[i][1] * np.sum(self.évalPointsFixes[i]) / nbÉtudiants
+        return(ret)
 
     # Tests
     def test_créerQuestionsDevoir(self, évals=False):
@@ -545,3 +549,5 @@ if __name__ == '__main__':
     devoir = Devoir('MPSI','DS',1,'20.09.2017',20,2,[],[("Présentation",2)],[("Homogénéité",-0.15)])
     devoir.test_créerQuestionsDevoir(True)
     print(devoir.calculerRésultatsBruts())
+    print(devoir.calculerRésultatsClasse())
+    print(devoir.calculerTauxDeComplétion())

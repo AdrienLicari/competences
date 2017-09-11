@@ -445,7 +445,7 @@ class Devoir(object):
         return(resultat * multiplie + ajoute)
 
     def nbQuestions(self) -> int:
-        return (np.sum(np.where(np.max(self.coeff, axis=1) >= 0, 1, 0)))
+        return (np.sum(np.where(np.max(self.éval, axis=(1,2)) >= 0, 1, 0)))
         
     def calculerTauxDeComplétion(self) -> np.ndarray:
         """
@@ -551,3 +551,4 @@ if __name__ == '__main__':
     print(devoir.calculerRésultatsBruts())
     print(devoir.calculerRésultatsClasse())
     print(devoir.calculerTauxDeComplétion())
+    print(devoir.nbQuestions())

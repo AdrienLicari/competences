@@ -8,6 +8,25 @@ Module gérant le stockage et le traitement des données.
 from itertools import product
 import numpy as np
 
+def extrude(a, b, axis):
+    newShape = []
+    extendShape = []    
+    shapeA = a.shape
+    shapeB = b.shape
+    iA = 0
+    for iB in range(len(shapeB)):
+        if iB in axis:
+            newShape.append(shapeB[iB])
+            extendShape.append(1)
+        else:
+            newShape.append(shapeA[iA])
+            extendShape.append(shapeA[iA])
+            iA = iA + 1
+    ret = np.empty(newShape, dtype=b.dtype)
+    ret[...] = a.reshape(tuple(extendShape))
+    return ret
+
+
 ## classe pour gérer les devoirs
 class Devoir(object):
     """
@@ -370,8 +389,13 @@ class Devoir(object):
         - valeur : paire (éssais,réussites) les pourcentages d'essais des étudiants,
                    et de réussites des étudiants qui ont essayé
         """
-        return(0)
-
+        réussites = np.sum(np.where(self.éval >= self.nvxAcq, 1, 0), axis=1)
+        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=1)        
+        ret = {}
+        for i in range(réussite.size()):
+            ret[i] = (éssais[i], réussites[i])
+        return(ret)
+        
     def calculerRésultatsBruts(self) -> np.ndarray:
         """
         Calcule les résultats bruts du devoir.
@@ -382,7 +406,46 @@ class Devoir(object):
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        return(0)
+        évalModificateurs = self.évalModificateurs.astype(float)        
+        évalPointsFixes = self.évalPointsFixes.astype(float)
+        évaltmp = self.éval.astype(float)
+        éval = np.where(évaltmp >= 0., évaltmp, 0.)
+        coeff = self.coeff[:self.éval.shape[0], :self.éval.shape[1]]
+#        pointsFixes = self.pointsFixes[:self.évalPointsFixes.shape[0], :self.évalPointsFixes.shape[1]]
+
+
+
+#        modificateurs = self.modificateurs[:self.évalModificateurs.shape[0], :self.évalModificateurs.shape[1]]
+        modificateurs = self.modificateurs
+
+        pointsFixes = np.zeros((évalPointsFixes.shape[0]), dtype=float)
+        totalPointsFixes = 0
+        
+        for i in range(len(pointsFixes)):
+            valeur = self.pointsFixes[i][1]
+            totalPointsFixes = totalPointsFixes + valeur
+            pointsFixes[i] = valeur
+
+        modificateurs = np.zeros((évalModificateurs.shape[0]), dtype=float)
+        for i in range(len(self.modificateurs)):
+            valeur = self.modificateurs[i][1]
+            modificateurs[i] = valeur
+
+        print(np.sum(éval * extrude(coeff, éval, [2]), axis = (0,1)))
+        print(np.sum(coeff)*(self.nvxAcq-1))
+        print(self.noteMax - totalPointsFixes)
+        print(np.sum(évalPointsFixes * extrude(pointsFixes, évalPointsFixes, [1]), axis = 0))
+        print(np.product(évalModificateurs * extrude(modificateurs, évalModificateurs, [1]) + np.ones(évalModificateurs.shape, dtype=float), axis = 0))
+
+
+        return (
+            (np.sum(éval * extrude(coeff, éval, [2]), axis = (0,1))
+             / (np.sum(coeff)*(self.nvxAcq-1))
+             * (self.noteMax - totalPointsFixes)
+             + np.sum(évalPointsFixes * extrude(pointsFixes, évalPointsFixes, [1]), axis = 0)
+            ) * np.product(évalModificateurs * extrude(modificateurs, évalModificateurs, [1]) + np.ones(évalModificateurs.shape, dtype=float), axis = 0)
+               )
+            
 
     def calculerRésultatsAjustés(self, traitement="aucun", note=20) -> np.ndarray:
         """
@@ -479,5 +542,6 @@ def compétenceÉtudiant(listeDevoirs:list, nomÉtudiant:str, prénomÉtudiant:s
 
 ## Partie pour les tests indépendants
 if __name__ == '__main__':
-    devoir = Devoir('MPSI','DS',1,'20.09.2017',2,[('a','a')],20,[("Présentation",2)],[("Homogénéité",-0.15)])
+    devoir = Devoir('MPSI','DS',1,'20.09.2017',20,2,[],[("Présentation",2)],[("Homogénéité",-0.15)])
     devoir.test_créerQuestionsDevoir(True)
+    print(devoir.calculerRésultatsBruts())

@@ -435,11 +435,11 @@ class Devoir(object):
         multiplie = 1.
         ajoute = 0.
         
-        if traitements == "moyenne":
+        if traitement == "moyenne":
             ajoute = note - np.mean(resultat)
-        if traitements == "mediane":
+        if traitement == "mediane":
             ajoute = note - np.median(resultat)
-        if traitements == "meilleure":
+        if traitement == "meilleure":
             multiplie = note / np.max(resultat)
         
         return(resultat * multiplie + ajoute)
@@ -455,7 +455,7 @@ class Devoir(object):
         """
         return (np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.), axis=0) / float(self.nbQuestions()))
 
-    def calculerRésultatsClasse(self, traitements="aucun", note=20) -> dict:
+    def calculerRésultatsClasse(self, traitement="aucun", note=20) -> dict:
         """
         Calcule les résultats après traitement. Renvoie un dict avec les éléments suivants:
         - clé 'moyenne': la moyenne de la classe
@@ -472,7 +472,7 @@ class Devoir(object):
         nbÉtudiants = float(len(self.étudiants))
         nbQuestions = float(self.nbQuestions())
         ret = {}
-        res = self.calculerRésultatsBruts()
+        res = self.calculerRésultatsAjustés(traitement, note)
         ret['moyenne'] = np.mean(res)
         ret['mediane'] = np.median(res)
         ret['écart-type'] = np.std(res)
@@ -480,7 +480,7 @@ class Devoir(object):
         ret['dernier'] = np.min(res)
         ret['quantite'] = np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.)) * 100. / nbQuestions / nbÉtudiants
         histo = []
-        for gauche in range(0,int(np.max(res)),2):
+        for gauche in range(0,self.noteMax,2):
             droite = gauche + 2.
             histo.append(np.sum(np.where(np.logical_and(res >= gauche, res < droite), 1., 0.)))
         ret['histogrammme'] = histo

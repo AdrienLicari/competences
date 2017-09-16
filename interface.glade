@@ -1112,7 +1112,7 @@ Exemples :
             <property name="can_focus">False</property>
             <property name="layout_style">end</property>
             <child>
-              <object class="GtkButton" id="button1">
+              <object class="GtkButton" id="fenêtreÉvaluationDevoirBoutonAnnuler">
                 <property name="label">gtk-cancel</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
@@ -1140,7 +1140,7 @@ Exemples :
               </packing>
             </child>
             <child>
-              <object class="GtkButton" id="button2">
+              <object class="GtkButton" id="fenêtreÉvaluationDevoirBoutonValider">
                 <property name="label">gtk-ok</property>
                 <property name="visible">True</property>
                 <property name="can_focus">True</property>
@@ -1465,4 +1465,8 @@ Si vous laissez une évaluation égale à -1, il sera considéré que l'étudian
       </object>
     </child>
     <action-widgets>
-      <action-widget response="-6">button1</action-widget>
+      <action-widget response="-6">fenêtreÉvaluationDevoirBoutonAnnuler</action-widget>
+      <action-widget response="-5">fenêtreÉvaluationDevoirBoutonValider</action-widget>
+    </action-widgets>
+  </object>
+</interface>

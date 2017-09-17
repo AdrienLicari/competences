@@ -198,6 +198,7 @@ class FenêtreÉvaluationDevoir(object):
     """
     colÉtNo, colÉtNom, colÉtPrésence, colÉtÉvalué = 0,1,2,3
     colQuest, colComp, colCoef, colÉval = 0,1,2,3
+    premièreOuverture = True
     def __init__(self, devoir:Devoir, builder:Gtk.Builder, bdd:BaseDeDonnées, idDev:int):
         """
         Constructeur de la fenêtre.
@@ -230,12 +231,17 @@ class FenêtreÉvaluationDevoir(object):
         for ét in devoir.get_listeÉtudiantsModèle():
             self.modèleÉtudiants.append(ét)
         self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
-        renderer_étudiant = Gtk.CellRendererText()
-        renderer_étudiant.set_property("foreground","grey")
-        self.sélecteurÉtudiant.pack_start(renderer_étudiant, True)
-        self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", FenêtreÉvaluationDevoir.colÉtNom)
-        self.sélecteurÉtudiant.set_active(self.étudiantActif)
-        self.sélecteurÉtudiant.add_attribute(renderer_étudiant,'foreground-set',FenêtreÉvaluationDevoir.colÉtÉvalué)
+        if FenêtreÉvaluationDevoir.premièreOuverture:
+            renderer_étudiant = Gtk.CellRendererText()
+            renderer_étudiant.set_property("foreground","grey")
+            self.sélecteurÉtudiant.pack_start(renderer_étudiant, True)
+            self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", FenêtreÉvaluationDevoir.colÉtNom)
+            self.sélecteurÉtudiant.set_active(self.étudiantActif)
+            self.sélecteurÉtudiant.add_attribute(renderer_étudiant,'foreground-set',\
+                                                 FenêtreÉvaluationDevoir.colÉtÉvalué)
+            rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
+            builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
+            FenêtreÉvaluationDevoir.premièreOuverture = False
         # Autres infos
         texte_nvx = "Niveaux d'acquisition : {}".format(devoir.get_niveauxAcquisition())
         builder.get_object("fenêtreÉvaluationDevoirLabelNvxComp").set_text(texte_nvx)
@@ -254,9 +260,8 @@ class FenêtreÉvaluationDevoir(object):
                                lambda col, cell, model, iter, unused:
                                cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
         # Mise en place du modèle
+        self.sélecteurÉtudiant.set_active(self.étudiantActif)
         self.changeÉtudiant(self.sélecteurÉtudiant,False)
-        rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
-        builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
         # Connection des signaux
         builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée, \
                                                                          (self.modèle,int))

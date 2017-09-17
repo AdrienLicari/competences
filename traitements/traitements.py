@@ -371,23 +371,23 @@ class Devoir(object):
                    et de réussites des étudiants qui ont essayé
         """
         réussites = np.sum(np.where(self.éval >= self.nvxAcq, 1, 0), axis=(0,2))
-        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=(0,2))        
+        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=(0,2))
         ret = {}
         for i in range(réussite.size()):
             ret[self.compétences[i][0]] = (éssais[i], réussites[i])
         return(ret)
-        
+
     def calculerRésultatsBruts(self) -> np.ndarray:
         """
         Calcule les résultats bruts du devoir.
 
         Le calcul se fait ainsi : chaque compétence du devoir correspond à un certain nombre de points
         p (/nvxAcq-1) avec un coefficient c. Les résultats de l'étudiant sont :
-             (sum(p*c) / sum((nvxAcq-1)*c) * (noteMax-totalPointsFixes) + pointsFixes)*modificateurs
+             (sum(p*c) / sum((nvxAcq-1)*c) * (noteMax-totalPointsFixes) + pointsFixes)*(1+modificateurs)
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        évalModificateurs = self.évalModificateurs.astype(float)        
+        évalModificateurs = self.évalModificateurs.astype(float)
         évalPointsFixes = self.évalPointsFixes.astype(float)
         évaltmp = self.éval.astype(float)
         éval = np.where(évaltmp >= 0., évaltmp, 0.)
@@ -397,7 +397,7 @@ class Devoir(object):
 
         pointsFixes = np.zeros((évalPointsFixes.shape[0]), dtype=float)
         totalPointsFixes = 0
-        
+
         for i in range(len(pointsFixes)):
             valeur = self.pointsFixes[i][1]
             totalPointsFixes = totalPointsFixes + valeur
@@ -415,7 +415,7 @@ class Devoir(object):
              + np.sum(évalPointsFixes * pointsFixes.reshape((pointsFixes.size, 1)), axis = 0)
             ) * np.product(évalModificateurs * modificateurs.reshape((modificateurs.size, 1)) + np.ones(évalModificateurs.shape, dtype=float), axis = 0)
                )
-            
+
 
     def calculerRésultatsAjustés(self, traitement="aucun", note=20) -> np.ndarray:
         """
@@ -430,23 +430,23 @@ class Devoir(object):
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        
+
         resultat = self.calculerRésultatsBruts()
         multiplie = 1.
         ajoute = 0.
-        
+
         if traitement == "moyenne":
             ajoute = note - np.mean(resultat)
         if traitement == "mediane":
             ajoute = note - np.median(resultat)
         if traitement == "meilleure":
             multiplie = note / np.max(resultat)
-        
+
         return(resultat * multiplie + ajoute)
 
     def nbQuestions(self) -> int:
         return (np.sum(np.where(np.max(self.éval, axis=(1,2)) >= 0, 1, 0)))
-        
+
     def calculerTauxDeComplétion(self) -> np.ndarray:
         """
         Calcule le teux de complétion du devoir pour chaque étudiant, en pourcentage du nombre de questions abordées.
@@ -497,6 +497,14 @@ class Devoir(object):
         Cette fonction n'est pas censée être utilisée hors des tests.
 
         Si évals vaut True, elle est change la classe pour y mettre 5 étudiants et les évaluations correspondantes.
+
+        Résultats théoriques :
+        Selin : 12,29 brut, pas d'inhomogénéité, Présentation et Correction 1, cplétion 1,
+        Jérémy B: 20 brut, pas d'inhomogénéité, Présentation et Correction 1, cplétion 1,
+        Léo: 3.07 brut, pas d'inhomogénéité, Présentation et Correction 0.5 et 0, cplétion 0.5,
+        Jérémy M: brut 7.83, inhomogénéité, Présentation et Correction 0.5 et 1, cplétion 0.75
+        Maxime : absent, données inutilisées
+        Moyenne 10.80 - Médiane 10.06 - Complétion 0.8125 -
         """
         q1 = ("1.",[("Connaître les dimensions fondamentales",1),("Connaître les dimensions dérivées",1)])
         q2 = ("2.a.",[("Vérifier l'homogénéité",2)])
@@ -511,8 +519,8 @@ class Devoir(object):
         if évals:
             self.étudiants = [["Alp","Selin",True], \
                               ["Bazin","Jérémy",True], \
-                              ["Morceaux","Jérémy",True], \
                               ["Dias","Léo",True], \
+                              ["Morceaux","Jérémy",True], \
                               ["Gourgues","Maxime",False]]
             self.étudiants.sort(key=lambda a: a[0])
             self.nvxAcq = 2
@@ -530,7 +538,7 @@ class Devoir(object):
                                    [ 0, 1, 0,-1, 1]]],dtype=int)
             self.pointsFixes = [("Présentation",1), ("Correction de la langue",1)]
             self.modificateurs = [("Homogénéité",-0.15)]
-            self.évalPointsFixes = np.array([[1,1,0.5,0,0.5],[1,1,0,0.5,1]],dtype=float)
+            self.évalPointsFixes = np.array([[1,1,0.5,1,0.5],[1,1,0,0.5,1]],dtype=float)
             self.évalModificateurs = np.array([[0,0,0,1,1]],dtype=int)
 
 

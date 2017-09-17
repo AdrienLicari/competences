@@ -363,6 +363,26 @@ class Devoir(object):
                 self.évalModificateurs[i,j,étInds[(n,p)]] = éval
 
     # Traitement des données
+    def listePrésents(self) -> np.ndarray:
+        ret = []
+        for i in range(len(self.étudiants)):
+            if self.étudiants[i][2]:
+                ret.append(i)
+        return (np.array(ret))
+        
+    def listeAbsents(self) -> np.ndarray:
+        ret = []
+        for i in range(len(self.étudiants)):
+            if i not in self.listePrésents():
+                ret.append(i)
+        return (np.array(ret))
+        
+    def évalPrésents(self) -> np.ndarray:
+        ret = self.éval.astype(float)
+        for i in self.listeAbsents():
+            ret[:,:,i].fill(-1.)
+        return (ret)
+        
     def calculerRésultatsParCompétences(self) -> dict:
         """
         Renvoie un dict, chaque élément étant pour une compétence (unique)
@@ -370,8 +390,8 @@ class Devoir(object):
         - valeur : paire (éssais,réussites) les pourcentages d'essais des étudiants,
                    et de réussites des étudiants qui ont essayé
         """
-        réussites = np.sum(np.where(self.éval >= self.nvxAcq, 1, 0), axis=(0,2))
-        éssais = np.sum(np.where(self.éval >= 0, 1, 0), axis=(0,2))        
+        réussites = np.sum(np.where(self.évalPrésents() >= self.nvxAcq, 1, 0), axis=(0,2))
+        éssais = np.sum(np.where(self.évalPrésents() >= 0, 1, 0), axis=(0,2))        
         ret = {}
         for i in range(réussite.size()):
             ret[self.compétences[i][0]] = (éssais[i], réussites[i])
@@ -389,8 +409,7 @@ class Devoir(object):
         """
         évalModificateurs = self.évalModificateurs.astype(float)        
         évalPointsFixes = self.évalPointsFixes.astype(float)
-        évaltmp = self.éval.astype(float)
-        éval = np.where(évaltmp >= 0., évaltmp, 0.)
+        éval = np.where(self.éval >= 0., self.éval, 0.)
         coeff = self.coeff[:self.éval.shape[0], :self.éval.shape[1]]
 
         modificateurs = self.modificateurs
@@ -432,20 +451,21 @@ class Devoir(object):
         """
         
         resultat = self.calculerRésultatsBruts()
+        resultatFiltre = resultat[self.listePrésents()]
         multiplie = 1.
         ajoute = 0.
         
         if traitement == "moyenne":
-            ajoute = note - np.mean(resultat)
+            ajoute = note - np.mean(resultatFiltre)
         if traitement == "mediane":
-            ajoute = note - np.median(resultat)
+            ajoute = note - np.median(resultatFiltre)
         if traitement == "meilleure":
-            multiplie = note / np.max(resultat)
+            multiplie = note / np.max(resultatFiltre)
         
         return(resultat * multiplie + ajoute)
 
     def nbQuestions(self) -> int:
-        return (np.sum(np.where(np.max(self.éval, axis=(1,2)) >= 0, 1, 0)))
+        return (np.sum(np.where(np.max(self.évalPrésents(), axis=(1,2)) >= 0, 1, 0)))
         
     def calculerTauxDeComplétion(self) -> np.ndarray:
         """
@@ -453,7 +473,7 @@ class Devoir(object):
 
         Renvoie le calcul sous la forme d'un tableau indexé sur les étudiants dans le tableau self.étudiants
         """
-        return (np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.), axis=0) / float(self.nbQuestions()))
+        return (np.sum(np.where(np.max(self.évalPrésents(), axis=1) >= 0, 1., 0.), axis=0) / float(self.nbQuestions()))
 
     def calculerRésultatsClasse(self, traitement="aucun", note=20) -> dict:
         """
@@ -469,25 +489,28 @@ class Devoir(object):
         - pour chaque malus, une clé avec le nom du malus : le nombre d'étudiants ayant subi le malus
         - pour chaque bloc de points fixes, une clé avec le nom : la moyenne de la classe sur ce fixe
         """
-        nbÉtudiants = float(len(self.étudiants))
+        nbÉtudiants = float(len(self.listePrésents()))
         nbQuestions = float(self.nbQuestions())
         ret = {}
         res = self.calculerRésultatsAjustés(traitement, note)
-        ret['moyenne'] = np.mean(res)
-        ret['mediane'] = np.median(res)
-        ret['écart-type'] = np.std(res)
-        ret['premier'] = np.max(res)
-        ret['dernier'] = np.min(res)
-        ret['quantite'] = np.sum(np.where(np.max(self.éval, axis=1) >= 0, 1., 0.)) * 100. / nbQuestions / nbÉtudiants
+        resFiltre = res[self.listePrésents()]
+        ret['moyenne'] = np.mean(resFiltre)
+        ret['mediane'] = np.median(resFiltre)
+        ret['écart-type'] = np.std(resFiltre)
+        ret['premier'] = np.max(resFiltre)
+        ret['dernier'] = np.min(resFiltre)
+        ret['quantite'] = np.sum(np.where(np.max(self.évalPrésents(), axis=1) >= 0, 1., 0.)) * 100. / nbQuestions / nbÉtudiants
         histo = []
         for gauche in range(0,self.noteMax,2):
             droite = gauche + 2.
-            histo.append(np.sum(np.where(np.logical_and(res >= gauche, res < droite), 1., 0.)))
+            if droite >= self.noteMax :
+                droite = droite + 2.
+            histo.append(np.sum(np.where(np.logical_and(resFiltre >= gauche, resFiltre < droite), 1., 0.)))
         ret['histogrammme'] = histo
         for i in range(len(self.modificateurs)):
-            ret[self.modificateurs[i][0]] = np.sum(self.évalModificateurs[i])
+            ret[self.modificateurs[i][0]] = np.sum(self.évalModificateurs[i][self.listePrésents()])
         for i in range(len(self.pointsFixes)):
-            ret[self.pointsFixes[i][0]] = self.pointsFixes[i][1] * np.sum(self.évalPointsFixes[i]) / nbÉtudiants
+            ret[self.pointsFixes[i][0]] = self.pointsFixes[i][1] * np.sum(self.évalPointsFixes[i][self.listePrésents()]) / nbÉtudiants
         return(ret)
 
     # Tests
@@ -552,3 +575,4 @@ if __name__ == '__main__':
     print(devoir.calculerRésultatsClasse())
     print(devoir.calculerTauxDeComplétion())
     print(devoir.nbQuestions())
+

@@ -199,6 +199,7 @@ class FenêtreÉvaluationDevoir(object):
     colÉtNo, colÉtNom, colÉtPrésence, colÉtÉvalué = 0,1,2,3
     colQuest, colComp, colCoef, colÉval = 0,1,2,3
     premièreOuverture = True
+    handler_id_sélecteurÉtudiant = None
     def __init__(self, devoir:Devoir, builder:Gtk.Builder, bdd:BaseDeDonnées, idDev:int):
         """
         Constructeur de la fenêtre.
@@ -218,54 +219,55 @@ class FenêtreÉvaluationDevoir(object):
                                'tv':builder.get_object("fenêtreÉvaluationDevoirTreeViewPointsFixes"),
                                'rd':builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes")}
         self.vueModificateurs = {'label':builder.get_object("fenêtreÉvaluationDevoirLabelModifs"),
-                               'tv':builder.get_object("fenêtreÉvaluationDevoirTreeviewModifs"),
-                               'rd':builder.get_object("fenêtreÉvaluationDevoirRdModifs")}
-        self.fenêtre.set_title("Évaluation du " + devoir.get_enTêteDevoir())
-        # Préparation des attributs autres
-        self.devoir_save = devoir
-        self.étudiantActif = 0
-        self.bdd = bdd
-        self.idDev = idDev
-        # Sélection des étudiants
-        self.modèleÉtudiants = Gtk.ListStore(int,str,bool,bool)
-        for ét in devoir.get_listeÉtudiantsModèle():
-            self.modèleÉtudiants.append(ét)
-        self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
+                                 'tv':builder.get_object("fenêtreÉvaluationDevoirTreeviewModifs"),
+                                 'rd':builder.get_object("fenêtreÉvaluationDevoirRdModifs")}
         if FenêtreÉvaluationDevoir.premièreOuverture:
             renderer_étudiant = Gtk.CellRendererText()
             renderer_étudiant.set_property("foreground","grey")
             self.sélecteurÉtudiant.pack_start(renderer_étudiant, True)
             self.sélecteurÉtudiant.add_attribute(renderer_étudiant, "text", FenêtreÉvaluationDevoir.colÉtNom)
-            self.sélecteurÉtudiant.set_active(self.étudiantActif)
             self.sélecteurÉtudiant.add_attribute(renderer_étudiant,'foreground-set',\
                                                  FenêtreÉvaluationDevoir.colÉtÉvalué)
             rdr = builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNomRenderer")
             builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneNom").add_attribute(rdr,'visible',4)
+            col = builder.get_object("fenêtreÉvaluationDevoirColModifsVal")
+            col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirColModifsValRd"), \
+                                   lambda col, cell, model, iter, unused:
+                                   cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
+            col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes")
+            col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes"), \
+                                   lambda col, cell, model, iter, unused:
+                                   cell.set_property("text", "{:.2f}".format(model.get(iter, 2)[0])))
+            col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes1")
+            col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes1"), \
+                                   lambda col, cell, model, iter, unused:
+                                   cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
             FenêtreÉvaluationDevoir.premièreOuverture = False
+        # Préparation des attributs autres
+        self.fenêtre.set_title("Évaluation du " + devoir.get_enTêteDevoir())
+        self.devoir_save = devoir
+        self.étudiantActif = 0
+        self.bdd = bdd
+        self.idDev = idDev
+        # Sélection des étudiants
+        if FenêtreÉvaluationDevoir.handler_id_sélecteurÉtudiant is not None:
+            self.sélecteurÉtudiant.disconnect(FenêtreÉvaluationDevoir.handler_id_sélecteurÉtudiant)
+        self.modèleÉtudiants = Gtk.ListStore(int,str,bool,bool)
+        for ét in devoir.get_listeÉtudiantsModèle():
+            self.modèleÉtudiants.append(ét)
+        self.sélecteurÉtudiant.set_model(self.modèleÉtudiants)
+        self.sélecteurÉtudiant.set_active(self.étudiantActif)
+        self.changeÉtudiant(self.sélecteurÉtudiant,False)
         # Autres infos
         texte_nvx = "Niveaux d'acquisition : {}".format(devoir.get_niveauxAcquisition())
         builder.get_object("fenêtreÉvaluationDevoirLabelNvxComp").set_text(texte_nvx)
         builder.get_object("fenêtreÉvaluationDevoirTreeViewColonneÉval").\
             set_title("Éval (/{})".format(devoir.get_niveauxAcquisition()-1))
-        col = builder.get_object("fenêtreÉvaluationDevoirColModifsVal")
-        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirColModifsValRd"), \
-                               lambda col, cell, model, iter, unused:
-                               cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
-        col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes")
-        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes"), \
-                               lambda col, cell, model, iter, unused:
-                               cell.set_property("text", "{:.2f}".format(model.get(iter, 2)[0])))
-        col = builder.get_object("fenêtreÉvaluationDevoirColPointsFixes1")
-        col.set_cell_data_func(builder.get_object("fenêtreÉvaluationDevoirRdPointsFixes1"), \
-                               lambda col, cell, model, iter, unused:
-                               cell.set_property("text", "{:.2f}".format(model.get(iter, 1)[0])))
-        # Mise en place du modèle
-        self.sélecteurÉtudiant.set_active(self.étudiantActif)
-        self.changeÉtudiant(self.sélecteurÉtudiant,False)
         # Connection des signaux
         builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée, \
                                                                          (self.modèle,int))
-        builder.get_object("fenêtreÉvaluationDevoirSélecteurÉtudiant").connect("changed", self.changeÉtudiant)
+        FenêtreÉvaluationDevoir.handler_id_sélecteurÉtudiant = self.sélecteurÉtudiant.\
+                                                               connect("changed", self.changeÉtudiant)
         builder.get_object("fenêtreÉvaluationDevoirBoutonAppliquer").connect("clicked", self.sauvegarderÉvaluation)
         builder.get_object("fenêtreÉvaluationDevoirÉditeurÉval").connect("edited", self.évaluationÉditée,
                                                                          (self.modèle,int))

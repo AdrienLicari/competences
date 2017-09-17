@@ -440,7 +440,8 @@ class BaseDeDonnées(object):
                 sql_interm = "select qc.id from questionsCompetences as qc " + \
                              "join competence as c on c.id = qc.competenceId " + \
                              "join questions as q on q.id = qc.questionsId " + \
-                             """where q.nom like "{}" and c.nom like "{}";""".format(quest,comp)
+                             """where q.nom like "{}" and c.nom like "{}" and q.devoirId={};""".\
+                             format(quest,comp,dvId)
                 qc_id = [ a[0] for a in c.execute(sql_interm) ][0]
                 for k in kÉts:
                     sql_str += "({},{},{}), ".format(idÉts[k],qc_id,éval[k])
@@ -529,7 +530,8 @@ class BaseDeDonnées(object):
                 sql_interm = "select qc.id from questionsCompetences as qc " + \
                              "join competence as c on c.id = qc.competenceId " + \
                              "join questions as q on q.id = qc.questionsId " + \
-                             """where q.nom like "{}" and c.nom like "{}";""".format(quest,comp)
+                             """where q.nom like "{}" and c.nom like "{}" and q.devoirId={};""".\
+                             format(quest,comp,dvId)
                 qc_id = [ a[0] for a in c.execute(sql_interm) ][0]
                 eval_id = self.récupèreIds("etudiantsEvaluationCompetence", \
                                            {"questionsCompetencesId":qc_id,"etudiantsId":idÉt})[0]
